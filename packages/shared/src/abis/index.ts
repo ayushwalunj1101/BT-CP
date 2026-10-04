@@ -3,3 +3,4 @@ export { MockERC20Abi } from "./MockERC20.ts";
 export { SimpleAMMAbi } from "./SimpleAMM.ts";
 export { ObscuraAuctionAbi } from "./ObscuraAuction.ts";
 export { InvariantBountyAbi } from "./InvariantBounty.ts";
+export { ObscuraAuctionZKAbi } from "./ObscuraAuctionZK.ts";

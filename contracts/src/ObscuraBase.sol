@@ -230,17 +230,27 @@ abstract contract ObscuraBase is ReentrancyGuard {
             : (address(baseToken), uint256(o.amount));
     }
 
+    /// @dev Moves `amount` of `trader`'s free balance into their locked balance.
+    function _lock(address trader, address token, uint256 amount) internal {
+        _debitFree(trader, token, amount);
+        lockedBalance[trader][token] += amount;
+        totalLocked[token] += amount;
+    }
+
+    /// @dev Moves `amount` of `trader`'s locked balance back to free.
+    function _unlock(address trader, address token, uint256 amount) internal {
+        _releaseLocked(trader, token, amount);
+        _creditFree(trader, token, amount);
+    }
+
     function _lockOrder(Order memory o) internal {
         (address token, uint256 amount) = _lockedBy(o);
-        _debitFree(o.trader, token, amount);
-        lockedBalance[o.trader][token] += amount;
-        totalLocked[token] += amount;
+        _lock(o.trader, token, amount);
     }
 
     function _unlockOrder(Order memory o) internal {
         (address token, uint256 amount) = _lockedBy(o);
-        _releaseLocked(o.trader, token, amount);
-        _creditFree(o.trader, token, amount);
+        _unlock(o.trader, token, amount);
     }
 
     /// @dev Settles one order at the batch price and unlocks whatever it did not use.

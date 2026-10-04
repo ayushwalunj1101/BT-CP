@@ -10,6 +10,9 @@ node_modules/
 circuits/build/
 *.ptau
 *.zkey
+# ...except the clearing circuit's proving key: it must match the committed ClearingVerifier.sol, and a new
+# setup produces a different one (by design), so it is kept in the repository.
+!circuits/keys/clearing.zkey
 
 # Local chain deployments change on every run; Sepolia deployments are committed
 deployments/31337.json

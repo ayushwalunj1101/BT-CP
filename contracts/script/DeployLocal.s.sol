@@ -6,14 +6,16 @@ import {MockERC20} from "../src/tokens/MockERC20.sol";
 import {SimpleAMM} from "../src/amm/SimpleAMM.sol";
 import {ObscuraBase} from "../src/ObscuraBase.sol";
 import {ObscuraAuction} from "../src/ObscuraAuction.sol";
+import {ObscuraAuctionZK} from "../src/ObscuraAuctionZK.sol";
 import {InvariantBounty} from "../src/InvariantBounty.sol";
+import {ClearingVerifier} from "../src/zk/ClearingVerifier.sol";
+import {IClearingVerifier} from "../src/interfaces/IClearingVerifier.sol";
 
 /// @title DeployLocal
-/// @notice Deploys everything to a local Anvil chain: the tokens, the "normal exchange" (SimpleAMM),
-///         Obscura and its bounty vault. Seeds the AMM pool, Obscura's fee pool and the vault, funds the test
-///         accounts, approves both venues
-///         for them, deposits into Obscura for the victim and the simulated traders, and writes the addresses
-///         to a deployments JSON file.
+/// @notice Deploys everything to a local Anvil chain: the tokens, the "normal exchange" (SimpleAMM), the v1
+///         Obscura auction with its bounty vault, and the zero-knowledge auction with its verifier. Seeds the AMM
+///         pool, both fee pools and the vault, funds the test accounts, approves every venue for them, deposits
+///         into both auctions for the victim and the simulated traders, and writes the addresses to a JSON file.
 /// @dev Uses Anvil's public development mnemonic only, never a real key.
 ///      Output file: $DEPLOYMENTS_FILE, default ../deployments/31337.json.
 ///      Run: forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
@@ -28,69 +30,113 @@ contract DeployLocal is Script {
     uint256 internal constant BOUNTY_MUSD = 10_000e18;
     uint256 internal constant CLAIM_DELAY = 2;
 
-    /// @dev Accounts 1 to 9 get enough of both tokens to trade in either direction on either venue.
+    /// @dev Accounts 1 to 16 get enough of both tokens to trade in either direction on every venue.
+    ///      Roles: 1 victim, 2 bot, 3 solver, 4-9 traders on the v1 auction, 10 ZK solver, 11-16 ZK traders.
+    ///      Anvil only gives ETH to accounts 0 to 9, so the deployer sends some to 10 to 16.
     uint256 internal constant ACCOUNT_TKN = 100_000e18;
     uint256 internal constant ACCOUNT_MUSD = 10_000_000e18;
-    uint32 internal constant FUNDED_ACCOUNTS = 9;
-    /// @dev Account 1 (victim) and 4 to 9 (simulated traders) start with half their tokens inside Obscura.
+    uint32 internal constant FUNDED_ACCOUNTS = 16;
+    uint256 internal constant EXTRA_ACCOUNT_ETH = 100 ether;
+    /// @dev The victim and each simulated trader start with this much inside the auction they trade on.
     uint256 internal constant OBSCURA_TKN = 25_000e18;
     uint256 internal constant OBSCURA_MUSD = 2_500_000e18;
 
+    struct Deployed {
+        MockERC20 tkn;
+        MockERC20 musd;
+        SimpleAMM amm;
+        ObscuraAuction auction;
+        InvariantBounty bounty;
+        ClearingVerifier verifier;
+        ObscuraAuctionZK zkAuction;
+    }
+
     function run() external {
         uint256 deployerKey = vm.deriveKey(ANVIL_MNEMONIC, 0);
-        address deployer = vm.addr(deployerKey);
         string memory outFile = vm.envOr("DEPLOYMENTS_FILE", string("../deployments/31337.json"));
 
         vm.startBroadcast(deployerKey);
-        MockERC20 tkn = new MockERC20("Obscura Test Token", "TKN");
-        MockERC20 musd = new MockERC20("Mock USD", "mUSD");
-        SimpleAMM amm = new SimpleAMM(tkn, musd);
-        ObscuraAuction auction = new ObscuraAuction(tkn, musd, _localConfig());
-        InvariantBounty bounty = new InvariantBounty(auction, musd, CLAIM_DELAY);
+        Deployed memory d = _deployContracts();
+        _seed(d, vm.addr(deployerKey));
+        vm.stopBroadcast();
 
-        tkn.mint(deployer, POOL_TKN);
-        musd.mint(deployer, POOL_MUSD + FEE_POOL_MUSD + BOUNTY_MUSD);
-        musd.approve(address(bounty), BOUNTY_MUSD);
-        bounty.fund(BOUNTY_MUSD);
-        tkn.approve(address(amm), POOL_TKN);
-        musd.approve(address(amm), POOL_MUSD);
-        amm.addLiquidity(POOL_TKN, POOL_MUSD);
-        musd.approve(address(auction), FEE_POOL_MUSD);
-        auction.fundFeePool(FEE_POOL_MUSD);
+        _onboardAccounts(d);
+        _writeDeployment(d, outFile);
+    }
+
+    function _deployContracts() internal returns (Deployed memory d) {
+        d.tkn = new MockERC20("Obscura Test Token", "TKN");
+        d.musd = new MockERC20("Mock USD", "mUSD");
+        d.amm = new SimpleAMM(d.tkn, d.musd);
+        d.auction = new ObscuraAuction(d.tkn, d.musd, _localConfig(64, 4));
+        d.bounty = new InvariantBounty(d.auction, d.musd, CLAIM_DELAY);
+        d.verifier = new ClearingVerifier();
+        d.zkAuction =
+            new ObscuraAuctionZK(d.tkn, d.musd, _localConfig(16, 1), IClearingVerifier(address(d.verifier)));
+    }
+
+    function _seed(Deployed memory d, address deployer) internal {
+        d.tkn.mint(deployer, POOL_TKN);
+        d.musd.mint(deployer, POOL_MUSD + 2 * FEE_POOL_MUSD + BOUNTY_MUSD);
+        d.tkn.approve(address(d.amm), POOL_TKN);
+        d.musd.approve(address(d.amm), POOL_MUSD);
+        d.amm.addLiquidity(POOL_TKN, POOL_MUSD);
+        d.musd.approve(address(d.bounty), BOUNTY_MUSD);
+        d.bounty.fund(BOUNTY_MUSD);
+        d.musd.approve(address(d.auction), FEE_POOL_MUSD);
+        d.auction.fundFeePool(FEE_POOL_MUSD);
+        d.musd.approve(address(d.zkAuction), FEE_POOL_MUSD);
+        d.zkAuction.fundFeePool(FEE_POOL_MUSD);
 
         for (uint32 i = 1; i <= FUNDED_ACCOUNTS; i++) {
             address account = vm.addr(vm.deriveKey(ANVIL_MNEMONIC, i));
-            tkn.mint(account, ACCOUNT_TKN);
-            musd.mint(account, ACCOUNT_MUSD);
+            d.tkn.mint(account, ACCOUNT_TKN);
+            d.musd.mint(account, ACCOUNT_MUSD);
+            if (i >= 10) payable(account).transfer(EXTRA_ACCOUNT_ETH);
         }
-        vm.stopBroadcast();
+    }
 
-        // Each account approves both venues once, so demos and the harness can trade immediately.
+    /// @dev Each account approves every venue once, so demos and the harness can trade immediately.
+    function _onboardAccounts(Deployed memory d) internal {
         for (uint32 i = 1; i <= FUNDED_ACCOUNTS; i++) {
             vm.startBroadcast(vm.deriveKey(ANVIL_MNEMONIC, i));
-            tkn.approve(address(amm), type(uint256).max);
-            musd.approve(address(amm), type(uint256).max);
-            tkn.approve(address(auction), type(uint256).max);
-            musd.approve(address(auction), type(uint256).max);
-            if (i == 1 || i >= 4) {
-                auction.deposit(address(tkn), OBSCURA_TKN);
-                auction.deposit(address(musd), OBSCURA_MUSD);
+            d.tkn.approve(address(d.amm), type(uint256).max);
+            d.musd.approve(address(d.amm), type(uint256).max);
+            d.tkn.approve(address(d.auction), type(uint256).max);
+            d.musd.approve(address(d.auction), type(uint256).max);
+            d.tkn.approve(address(d.zkAuction), type(uint256).max);
+            d.musd.approve(address(d.zkAuction), type(uint256).max);
+            if (i == 1 || (i >= 4 && i <= 9)) {
+                d.auction.deposit(address(d.tkn), OBSCURA_TKN);
+                d.auction.deposit(address(d.musd), OBSCURA_MUSD);
+            }
+            if (i == 1 || i >= 11) {
+                d.zkAuction.deposit(address(d.tkn), OBSCURA_TKN);
+                d.zkAuction.deposit(address(d.musd), OBSCURA_MUSD);
             }
             vm.stopBroadcast();
         }
+    }
 
+    function _writeDeployment(Deployed memory d, string memory outFile) internal {
         string memory obj = "deployment";
         vm.serializeUint(obj, "chainId", block.chainid);
-        vm.serializeAddress(obj, "tkn", address(tkn));
-        vm.serializeAddress(obj, "musd", address(musd));
-        vm.serializeAddress(obj, "amm", address(amm));
-        vm.serializeAddress(obj, "auction", address(auction));
-        string memory json = vm.serializeAddress(obj, "bounty", address(bounty));
+        vm.serializeAddress(obj, "tkn", address(d.tkn));
+        vm.serializeAddress(obj, "musd", address(d.musd));
+        vm.serializeAddress(obj, "amm", address(d.amm));
+        vm.serializeAddress(obj, "auction", address(d.auction));
+        vm.serializeAddress(obj, "bounty", address(d.bounty));
+        vm.serializeAddress(obj, "verifier", address(d.verifier));
+        string memory json = vm.serializeAddress(obj, "zkAuction", address(d.zkAuction));
         vm.writeJson(json, outFile);
     }
 
     /// @dev Short windows for a local chain: commit 5 blocks, reveal 3, solve 3.
-    function _localConfig() internal pure returns (ObscuraBase.Config memory) {
+    function _localConfig(uint256 maxOrders, uint256 maxSolutions)
+        internal
+        pure
+        returns (ObscuraBase.Config memory)
+    {
         return ObscuraBase.Config({
             commitBlocks: 5,
             revealBlocks: 3,
@@ -98,8 +144,8 @@ contract DeployLocal is Script {
             revealBond: 0.01 ether,
             solverBond: 1 ether,
             solverReward: 10e18,
-            maxOrders: 64,
-            maxSolutions: 4
+            maxOrders: maxOrders,
+            maxSolutions: maxSolutions
         });
     }
 }

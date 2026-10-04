@@ -74,6 +74,8 @@ export type AnvilHandle = {
   httpUrl: string;
   wsUrl: string;
   provider: JsonRpcProvider;
+  /** Resolves when the Anvil process ends, for whatever reason. */
+  exited: Promise<void>;
   stop(): Promise<void>;
 };
 
@@ -94,11 +96,13 @@ export async function startAnvil(port: number): Promise<AnvilHandle> {
   await Promise.race([waitForRpc(httpUrl), failed]);
 
   const provider = httpProvider(httpUrl);
+  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   return {
     port,
     httpUrl,
     wsUrl: `ws://127.0.0.1:${port}`,
     provider,
+    exited,
     async stop() {
       provider.destroy();
       child.kill();
