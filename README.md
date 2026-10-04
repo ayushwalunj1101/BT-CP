@@ -16,7 +16,7 @@ Testnet only. No real funds at any stage.
 | 2 | Build the defence (batch auction + solver) | Done |
 | 3 | Bounty vault + invariant fuzzing | Done |
 | 4 | Zero-knowledge clearing | Done |
-| 5 | Web app + Sepolia | Next |
+| 5 | Web app + Sepolia | Website done; Sepolia deployment ready to run (needs your `.env`) |
 
 ## Prerequisites
 
@@ -47,6 +47,9 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run test:contracts` | Runs every Foundry test. |
 | `npm run typecheck` | Type-checks all TypeScript. |
 | `npm run format` | Formats TypeScript and JSON with Prettier. Use `forge fmt` inside `contracts/` for Solidity. |
+| `npm run web` | Starts the website on http://localhost:3000 (run `demo:up` first for the local chain). |
+| `npm run deploy:sepolia` | Deploys everything to Sepolia and verifies it on Etherscan. Add `-- --dry-run` to rehearse on a local chain first. |
+| `npm run sepolia:services` | Runs both solvers and the ZK inbox against Sepolia, for the live demo. |
 | `npm run demo:up` | Starts a local chain (a block every 2 s), deploys both venues, and runs the sandwich bot, the solver and six simulated traders. Leave it running. |
 | `npm run demo:attack` | Act I: a victim trade on SimpleAMM. Needs `demo:up` running in another terminal. Options: `-- --side sell --amount 500 --slippage 50` |
 | `npm run demo:defence` | Act II: the same trade as a sealed order through Obscura. Same options as `demo:attack`. |
@@ -111,6 +114,8 @@ packages/
   solver/           clearing.ts (the clearing algorithm), solver.ts (v1), zk.ts and zkSolver.ts (prove and
                     submit ZK batches), inbox.ts (the encrypted private order channel)
   harness/          demo:up, demo:attack, demo:defence, simulated traders, and the measurement harness
+web/                The website (Next.js 16, wagmi 3, viem): src/app (pages), src/components, src/lib
+scripts/            fuzz.mjs (long invariant campaign), deploy-sepolia.mjs
 circuits/clearing/  The clearing circuit, its tests, the setup script and the fixture script
 circuits/keys/      Proving key, witness generator and verification key (must match ClearingVerifier.sol)
 circuits/spikes/    Spike B circuit and pipeline script
@@ -340,6 +345,45 @@ sound as long as at least one contributor discarded their secret.
   solver-signed receipts that let a censored trader slash the solver, is not built. A censored trader also
   loses their bond today.
 - **One order per trader per batch, 16 orders per batch, and the whole balance locks while the batch runs.**
+
+## Stage 5: the website and Sepolia
+
+### The website
+
+| Page | What it does |
+|---|---|
+| Trade | Deposit, seal an order (the hash is computed in your browser), commit it with the bond, and it is revealed automatically in the reveal window while the tab is open. Your secret salt is kept in a reveal ticket you can download and restore. Shows your fill at the batch price. |
+| Private (ZK) | Seal with Poseidon, commit, and send the order itself to the solver, encrypted from the browser. Never revealed; shows your fill after the proof settles the batch. |
+| Batches | Recent batches on both auctions: clearing price, matched volume, solver, and every fill at that one price. |
+| Bounty | The vault's balance, the four rules checked live, and the two-step claim. |
+| Normal exchange | Act I in the browser: swap on SimpleAMM while the bot runs and see BOT, YOU, BOT in your block. |
+
+Run it locally: `npm run demo:up` in one terminal, `npm run web` in another, open http://localhost:3000 and click
+**Local test account** (Anvil's account #0, which Anvil signs for, so no key is involved). MetaMask works too.
+
+Tested in a real browser (Playwright) against the live local chain: connect, get test tokens, deposit; a sealed
+order revealed automatically and filled at the batch price (99.75, limit 101); a private ZK order proved and
+filled (99.56) with the balance unlocked to the wei; the batch explorer; a bounty claim refused with a plain
+message; a swap on the normal exchange sandwiched by the bot (100.00 bps); and the layout at phone width.
+Bugs found and fixed while testing: the test wallet disconnected on reload, and contract errors showed as raw
+bytes instead of names (calls are now simulated first, so errors are decoded before anything is sent).
+
+### Going live on Sepolia (your steps)
+
+1. In MetaMask, create a **new account used only for this project**. Never a personal wallet.
+2. Get **0.1 to 0.3 Sepolia ETH** for it from a faucet (for example Google Cloud's Web3 faucet). The rehearsal
+   used 15 M gas, about 0.03 ETH at typical Sepolia prices; the rest pays for solver transactions.
+3. Create a free **Alchemy** app on Sepolia and copy its HTTPS URL; create an **Etherscan** API key.
+4. Copy `.env.example` to `.env` and fill in `SEPOLIA_RPC_URL`, `DEPLOYER_PRIVATE_KEY` (exported from that
+   MetaMask account) and `ETHERSCAN_API_KEY`. Never commit `.env`, never paste it anywhere.
+5. `npm run deploy:sepolia -- --dry-run` (rehearsal), then `npm run deploy:sepolia`. Commit the new
+   `deployments/11155111.json`.
+6. `npm run sepolia:services` to run the solvers, and `npm run web`. In MetaMask switch to Sepolia; visitors
+   press **Get test tokens** on the site, since anyone can mint the test tokens.
+
+On Sepolia a batch takes about 2 minutes (11 blocks of 12 s). The ZK inbox runs on the laptop that runs
+`sepolia:services`, so private (ZK) orders can be placed from that machine's browser; the commit-reveal auction,
+explorer and bounty board work from anywhere.
 
 ## Conventions
 

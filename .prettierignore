@@ -4,3 +4,5 @@ node_modules/
 packages/shared/src/abis/
 results/
 *.md
+.next/
+web/next-env.d.ts

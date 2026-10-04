@@ -75,6 +75,13 @@ export class OrderInbox {
   /** Start listening on 127.0.0.1:`port` (0 = any free port). Resolves to the inbox URL. */
   listen(port: number): Promise<string> {
     this.server = createServer(async (req, res) => {
+      // The website posts here from another origin. The inbox only ever receives ciphertext, so any origin is fine.
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Headers", "content-type");
+      if (req.method === "OPTIONS") {
+        res.writeHead(204).end();
+        return;
+      }
       try {
         if (req.method === "GET" && req.url === "/public-key") {
           res

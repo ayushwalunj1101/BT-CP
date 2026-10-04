@@ -18,6 +18,11 @@ circuits/build/
 deployments/31337.json
 deployments/test-*.json
 
+# Next.js build output and generated files
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
 # Test and tool output
 coverage/
 *.log

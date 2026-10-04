@@ -5,7 +5,8 @@
   "description": "Code every Obscura service shares: ABIs, deployments, accounts, chain helpers, AMM maths.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./abis": "./src/abis/index.ts"
   },
   "dependencies": {
     "ethers": "^6.17.0",
