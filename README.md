@@ -13,8 +13,8 @@ Testnet only. No real funds at any stage.
 |---|---|---|
 | 0 | Setup and spikes | Done |
 | 1 | Prove the problem (AMM + sandwich bot) | Done |
-| 2 | Build the defence (batch auction + solver) | Next |
-| 3 | Bounty vault + invariant fuzzing | |
+| 2 | Build the defence (batch auction + solver) | Done |
+| 3 | Bounty vault + invariant fuzzing | Next |
 | 4 | Zero-knowledge clearing | |
 | 5 | Web app + Sepolia | |
 
@@ -47,22 +47,27 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run test:contracts` | Runs every Foundry test. |
 | `npm run typecheck` | Type-checks all TypeScript. |
 | `npm run format` | Formats TypeScript and JSON with Prettier. Use `forge fmt` inside `contracts/` for Solidity. |
-| `npm run demo:up` | Starts a local chain (a block every 4 s), deploys the contracts, and runs the sandwich bot. Leave it running. |
+| `npm run demo:up` | Starts a local chain (a block every 2 s), deploys both venues, and runs the sandwich bot, the solver and six simulated traders. Leave it running. |
 | `npm run demo:attack` | Act I: a victim trade on SimpleAMM. Needs `demo:up` running in another terminal. Options: `-- --side sell --amount 500 --slippage 50` |
-| `npm run harness` | Measures extraction over 100 random trades, with and without the bot, and writes a CSV to `results/`. Options: `-- --trades 100 --seed 1 --slippage 100 --min-size 50 --max-size 500` |
+| `npm run demo:defence` | Act II: the same trade as a sealed order through Obscura. Same options as `demo:attack`. |
+| `npm run harness` | Measures extraction over 100 random trades on both venues, with and without the bot, and writes CSVs to `results/`. Options: `-- --venue both --trades 100 --seed 1 --slippage 100 --min-size 50 --max-size 500` |
 | `npm run bot` | Runs only the bot, against a chain that is already running. |
+| `npm run solver` | Runs only the solver, against a chain that is already running. |
+| `npm run vectors` | Regenerates the commitment-hash test vectors that both the TypeScript and Solidity suites check. |
 | `npm run deploy:local` | Runs only the deploy script, against a chain on port 8545. |
 | `npm run abis` | Rebuilds the contracts and regenerates the TypeScript ABIs in `packages/shared/src/abis/`. Run after changing a contract's interface. |
 | `npm run chain` | Starts a bare Anvil chain with 4-second blocks. |
 | `npm run spike:ordering` | Re-runs Spike A. |
 | `npm run spike:zk` | Re-runs Spike B: compiles the circuit, runs a local setup, proves, and regenerates the Solidity verifier and proof fixture. |
 
-## Running the Act I demo
+## Running the demo
 
 Two terminals, both in this folder:
 
-1. `npm run demo:up` and wait for "Ready". This terminal shows what the bot sees and does.
-2. `npm run demo:attack` makes an ordinary trade and prints the block: bot, victim, bot.
+1. `npm run demo:up` and wait for "Ready". This terminal shows what the bot, the solver and the traders do.
+2. Act I: `npm run demo:attack` makes an ordinary trade on SimpleAMM and prints the block: bot, victim, bot.
+3. Act II: `npm run demo:defence` makes the same trade as a sealed Obscura order and follows it through one
+   batch (about 22 s): what the bot sees, the clearing price, every fill at that price, and the bot's zero.
 
 Stop with Ctrl+C in the first terminal.
 
@@ -74,16 +79,21 @@ leftover chain (PowerShell: `Stop-Process -Name anvil`).
 
 ```
 contracts/
+  src/ObscuraBase.sol       Deposit ledger, epoch clock, ETH bonds, settlement maths (no admin)
+  src/ObscuraAuction.sol    Commit, reveal, submitSolution, settle
+  src/libraries/Clearing.sol  The rules a batch solution must obey, checked in one pass
   src/tokens/       MockERC20 (TKN and mUSD)
   src/amm/          SimpleAMM, the "normal exchange"
   script/           DeployLocal.s.sol
   test/unit/        Unit and fuzz tests per contract
+  test/vectors/     Commitment-hash vectors shared with the TypeScript tests
   test/spikes/      Spike B on-chain test and its generated verifier
   test/fixtures/    Proofs exported by the circuit scripts
 packages/
-  shared/           ABIs, deployments, Anvil accounts, chain helpers, AMM maths
+  shared/           ABIs, deployments, Anvil accounts, chain and batch-clock helpers, AMM maths, order hashing
   bot/              The sandwich bot: sandwich.ts (pure maths) and bot.ts (live mempool watcher)
-  harness/          demo:up, demo:attack, and the measurement harness
+  solver/           clearing.ts (the clearing algorithm) and solver.ts (solve and settle each batch)
+  harness/          demo:up, demo:attack, demo:defence, simulated traders, and the measurement harness
 circuits/spikes/    Spike B circuit and pipeline script
 spikes/             Spike A test
 deployments/        Contract addresses per chain (local files are git-ignored)
@@ -150,6 +160,55 @@ Lessons from building it:
   slippage. The bot ignores anything at or below 0.01 of a token (`DUST_PROFIT`).
 - The off-chain model matches the contract to the wei: the TypeScript sandwich reproduces the Solidity
   test's profit of 156.937522897291873389 mUSD exactly, and the live bot earns exactly what it planned.
+
+## Stage 2 results: the defence, measured
+
+The same 100 trades as Stage 1 (same seed, same sides, same sizes relative to the pool, the victim's
+slippage allowance becoming their limit price), each placed as a sealed order into an Obscura batch with
+six simulated traders, run once with the bot paused and once active.
+
+| Victim slippage | Trade size | SimpleAMM extraction | Obscura extraction | Obscura: victim filled | Same result with and without the bot |
+|---|---|---|---|---|---|
+| 1% | 0.5% to 5% | 100.00 bps (100 / 100 sandwiched) | **0.00 bps** (0 / 100) | 99 / 100, median 44% of the order | 100 / 100 |
+| 0.5% | 0.5% to 5% | 50.00 bps (100 / 100) | **0.00 bps** (0 / 100) | 78 / 100, median 21% | 100 / 100 |
+| 1% | 0.01% to 0.5% | 41.00 bps (41 / 100) | **0.00 bps** (0 / 100) | 99 / 100, median 100% | 100 / 100 |
+
+What this shows:
+
+- **The bot takes nothing on Obscura.** It sees every commit (a hash) and every reveal (too late: the batch is
+  closed and everyone gets one price), sends no transactions, and every victim's result is identical with
+  the bot running or not.
+- **Honest caveat: thin liquidity means partial fills.** Six simulated traders posting 100 to 600 TKN each
+  cannot absorb victim orders of 500 to 5,000 TKN, so large orders fill partly; a tighter limit (0.5%)
+  crosses fewer of them. On the AMM every trade fills, just at a worse price. A batch auction needs enough
+  counterparties per batch: that is its real trade-off against a pool, and the report should say so.
+
+Correctness evidence:
+
+- 71 Foundry tests and 30 TypeScript tests. Line coverage 98% on ObscuraAuction, 99% on ObscuraBase.
+- The solver's answer for 1,000 random order books passes the deployed contract's own `checkClearing`, and
+  adding one wei to any fill is always rejected.
+- `test_RevealOrderChangesNobodysResult`: the same orders revealed in opposite orders give every trader
+  exactly the same result. Position in a batch is worth nothing.
+- After every settlement test, the contract's token and ETH balances equal everything it owes.
+- Commitment hashes match between TypeScript and Solidity on 16 shared vectors.
+
+Settlement gas grows linearly, about 94,000 per order:
+
+| Orders in batch | 8 | 16 | 32 | 64 |
+|---|---|---|---|---|
+| `settle()` gas | 0.99 M | 1.75 M | 3.25 M | 6.26 M |
+
+Design fixes made while building (also in the implementation plan):
+
+- **Self-slashing.** A slashed bond is split, half to whoever called `settle()` and half burned. If the
+  caller got the whole bond, a cheating solver could call `settle()` itself and lose nothing.
+- **Mistimed commits.** `commit(epoch, hash)` takes the batch number, so a transaction that lands one block
+  late reverts instead of being filed under the next batch, where its reveal would fail.
+- **Pull payments.** ETH owed to people is credited and withdrawn by them, so a solver that refuses ETH
+  cannot block settlement for everyone.
+- **No overflow on huge orders.** Recorded fills use full 256-bit amounts, because anyone can mint the
+  test tokens and a giant order would otherwise not fit.
 
 ## Conventions
 

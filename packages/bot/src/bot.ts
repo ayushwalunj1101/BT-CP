@@ -6,6 +6,8 @@
  *
  * Ordering rule (Spike A): Anvil ranks pending transactions by max fee per gas, real Ethereum
  * builders by priority fee. The bot moves both: higher than the victim's to go first, lower to go last.
+ *
+ * It also watches Obscura, logs what it sees there, and finds nothing to act on.
  */
 import {
   Contract,
@@ -16,7 +18,16 @@ import {
   type WebSocketProvider,
   parseUnits,
 } from "ethers";
-import { MockERC20Abi, SimpleAMMAbi, fmtAmount, fmtGwei, read, shortHash, wsProvider } from "@obscura/shared";
+import {
+  MockERC20Abi,
+  ObscuraAuctionAbi,
+  SimpleAMMAbi,
+  fmtAmount,
+  fmtGwei,
+  read,
+  shortHash,
+  wsProvider,
+} from "@obscura/shared";
 import { DUST_PROFIT, type SandwichPlan, planSandwich } from "./sandwich.ts";
 
 export type BotDecision =
@@ -38,6 +49,8 @@ export type BotConfig = {
   chainId: number;
   wallet: Wallet;
   amm: string;
+  /** ObscuraAuction address, if deployed. The bot watches it too, and finds nothing it can use. */
+  auction?: string;
   /** Token symbols by address, for log lines. */
   symbols: Record<string, string>;
   /** Ignore sandwiches that would earn this much or less, in the victim's input token. Default: DUST_PROFIT. */
@@ -53,6 +66,7 @@ const SWAP_GAS_LIMIT = 200_000n;
 
 export class SandwichBot {
   private readonly ammInterface = new Interface(SimpleAMMAbi);
+  private readonly auctionInterface = new Interface(ObscuraAuctionAbi);
   private readonly amm: Contract;
   private readonly log: (line: string) => void;
   private ws?: WebSocketProvider;
@@ -141,12 +155,40 @@ export class SandwichBot {
     return this.config.symbols[token.toLowerCase()] ?? shortHash(token);
   }
 
+  /**
+   * What the bot can do about an Obscura transaction: nothing.
+   * A commit carries only a hash. A reveal is readable, but it only arrives after the commit window has
+   * closed, nobody can add orders to the batch any more, and every fill gets the same price anyway.
+   */
+  private inspectObscura(hash: string, data: string): void {
+    const call = this.auctionInterface.parseTransaction({ data });
+    if (call?.name === "commit") {
+      this.log(
+        `pending ${shortHash(hash)}  Obscura commit(${shortHash(call.args[1] as string)})` +
+          `  sealed order: no side, no size, no price. Nothing to front-run.`,
+      );
+      this.decide({ victim: hash, action: "skip", reason: "sealed order" });
+    } else if (call?.name === "reveal") {
+      const isBuy = call.args[2] as boolean;
+      this.log(
+        `pending ${shortHash(hash)}  Obscura reveal: ${isBuy ? "buy" : "sell"} ${fmtAmount(call.args[4] as bigint)} TKN` +
+          `  too late: the batch is closed and every fill gets one price. Going first is worth nothing.`,
+      );
+      this.decide({ victim: hash, action: "skip", reason: "batch order, uniform price" });
+    }
+  }
+
   private async handle(hash: string): Promise<void> {
     if (this.paused || this.decisions.has(hash)) return; // act on each transaction at most once
     const { provider, wallet } = this.config;
 
     const tx = await provider.getTransaction(hash);
-    if (!tx?.to || tx.to.toLowerCase() !== this.config.amm.toLowerCase()) return;
+    if (!tx?.to) return;
+    if (this.config.auction && tx.to.toLowerCase() === this.config.auction.toLowerCase()) {
+      this.inspectObscura(hash, tx.data);
+      return;
+    }
+    if (tx.to.toLowerCase() !== this.config.amm.toLowerCase()) return;
     if (tx.from.toLowerCase() === wallet.address.toLowerCase()) return; // our own front/back-run
 
     const call = this.ammInterface.parseTransaction({ data: tx.data });

@@ -10,6 +10,7 @@
   "dependencies": {
     "@obscura/bot": "*",
     "@obscura/shared": "*",
+    "@obscura/solver": "*",
     "ethers": "^6.17.0"
   }
 }

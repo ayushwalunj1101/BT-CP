@@ -12,7 +12,7 @@
 import { join } from "node:path";
 import { formatUnits } from "ethers";
 import { DEPLOYMENTS_DIR, ROLE, anvilWallet, read, shortfallBps } from "@obscura/shared";
-import { startStage1 } from "./env.ts";
+import { startLocalEnv } from "./env.ts";
 import { mulberry32 } from "./random.ts";
 import { type Side, sendVictimSwap, swapOutput } from "./victim.ts";
 
@@ -31,8 +31,10 @@ export type MeasurementOptions = {
 };
 
 export type TradeRow = {
+  venue: "amm" | "obscura";
   trade: number;
   side: Side;
+  /** AMM: the amount the victim pays in (mUSD when buying, TKN when selling). Obscura: the TKN ordered. */
   amountIn: bigint;
   slippageBps: bigint;
   fairOut: bigint;
@@ -60,7 +62,7 @@ export type Summary = {
 export async function runMeasurement(
   options: MeasurementOptions,
 ): Promise<{ rows: TradeRow[]; summary: Summary }> {
-  const env = await startStage1({
+  const env = await startLocalEnv({
     port: options.port,
     mining: { mode: "manual" },
     deploymentFile: join(DEPLOYMENTS_DIR, `test-${options.port}.json`),
@@ -123,6 +125,7 @@ export async function runMeasurement(
         throw new Error(`trade ${trade}: the victim's swap reverted`);
       const lossInTkn = side === "buy"; // the victim receives TKN when buying
       const row: TradeRow = {
+        venue: "amm",
         trade,
         side,
         amountIn,
@@ -164,9 +167,10 @@ export function summarize(rows: TradeRow[]): Summary {
 
 export function toCsv(rows: TradeRow[]): string {
   const header =
-    "trade,side,amount_in,slippage_bps,fair_out,actual_out,extraction_bps,attacked,bot_profit_musd,victim_loss_musd";
+    "venue,trade,side,amount_in,slippage_bps,fair_out,actual_out,extraction_bps,attacked,bot_profit_musd,victim_loss_musd";
   const lines = rows.map((r) =>
     [
+      r.venue,
       r.trade,
       r.side,
       formatUnits(r.amountIn, 18),

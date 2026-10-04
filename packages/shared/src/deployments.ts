@@ -12,6 +12,7 @@ export type Deployment = {
   tkn: string;
   musd: string;
   amm: string;
+  auction: string;
 };
 
 export function deploymentPath(chainId: number = ANVIL_CHAIN_ID): string {
@@ -29,7 +30,13 @@ export function loadDeployment(file: string = deploymentPath()): Deployment {
       throw new Error(`${file}: "${key}" is not an address`);
     return getAddress(value);
   };
-  return { chainId: Number(raw.chainId), tkn: address("tkn"), musd: address("musd"), amm: address("amm") };
+  return {
+    chainId: Number(raw.chainId),
+    tkn: address("tkn"),
+    musd: address("musd"),
+    amm: address("amm"),
+    auction: address("auction"),
+  };
 }
 
 /** Run contracts/script/DeployLocal.s.sol against `rpcUrl` and return the addresses it wrote to `outFile`. */

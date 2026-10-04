@@ -1,0 +1,14 @@
+{
+  "name": "@obscura/solver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Off-chain clearing engine: computes each batch's uniform price and fills, submits them, and settles.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@obscura/shared": "*",
+    "ethers": "^6.17.0"
+  }
+}

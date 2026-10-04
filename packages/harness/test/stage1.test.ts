@@ -6,15 +6,15 @@ import { join } from "node:path";
 import { parseUnits } from "ethers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEPLOYMENTS_DIR, ROLE, anvilWallet, getAmountOut, read } from "@obscura/shared";
-import { type Stage1Env, startStage1 } from "../src/env.ts";
+import { type LocalEnv, startLocalEnv } from "../src/env.ts";
 import { runMeasurement } from "../src/measurement.ts";
 import { sendVictimSwap, swapOutput } from "../src/victim.ts";
 
 const PORT = 8571;
-let env: Stage1Env;
+let env: LocalEnv;
 
 beforeAll(async () => {
-  env = await startStage1({
+  env = await startLocalEnv({
     port: PORT,
     mining: { mode: "manual" },
     deploymentFile: join(DEPLOYMENTS_DIR, `test-${PORT}.json`),

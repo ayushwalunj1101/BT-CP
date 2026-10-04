@@ -1,43 +1,57 @@
 /**
- * Start everything Act I needs, in one terminal: a local chain with a block every few seconds,
- * the deployed contracts, and the sandwich bot printing what it sees.
- * Usage: npm run demo:up -- [--port 8545] [--block-time 4]
- * Then, in a second terminal: npm run demo:attack
+ * Start everything the demo needs, in one terminal: a local chain with a block every few seconds, both
+ * venues deployed, the sandwich bot printing what it sees, the solver, and six simulated traders who put
+ * sealed orders into every Obscura batch.
+ * Usage: npm run demo:up -- [--port 8545] [--block-time 2] [--quiet-traders]
+ * Then, in a second terminal: npm run demo:attack (Act I) or npm run demo:defence (Act II).
  */
 import { parseArgs } from "node:util";
 import { deploymentPath, fmtAmount, read } from "@obscura/shared";
-import { startStage1 } from "./env.ts";
+import { startLocalEnv } from "./env.ts";
 
 const { values } = parseArgs({
   options: {
     port: { type: "string", default: "8545" },
-    "block-time": { type: "string", default: "4" },
+    "block-time": { type: "string", default: "2" },
   },
 });
 const port = Number(values.port);
 const blockTime = Number(values["block-time"]);
 
-console.log("Starting a local chain, deploying the contracts, and starting the bot…\n");
-const env = await startStage1({
+console.log("Starting a local chain, deploying both venues, and starting the bot, solver and traders…\n");
+const env = await startLocalEnv({
   port,
   mining: { mode: "interval", seconds: blockTime },
   deploymentFile: deploymentPath(),
-  botLog: (line) => console.log(`[bot] ${line}`),
+  live: true,
+  botLog: (line) => console.log(`[bot]     ${line}`),
+  solverLog: (line) => console.log(`[solver]  ${line}`),
+  tradersLog: (line) => console.log(`[traders] ${line}`),
+  seed: Date.now() % 1_000_000,
 });
 
-const [tknReserve, musdReserve] = await Promise.all([
+const [tknReserve, musdReserve, commitBlocks, revealBlocks, solveBlocks] = await Promise.all([
   read<bigint>(env.amm, "reserve0"),
   read<bigint>(env.amm, "reserve1"),
+  read<bigint>(env.auction, "commitBlocks"),
+  read<bigint>(env.auction, "revealBlocks"),
+  read<bigint>(env.auction, "solveBlocks"),
 ]);
+const batchSeconds = Number(commitBlocks + revealBlocks + solveBlocks) * blockTime;
+const rpcFlag = port === 8545 ? "" : ` -- --rpc ${env.anvil.httpUrl}`;
 console.log(`
-Chain      ${env.anvil.httpUrl}   (a new block every ${blockTime} s)
-TKN        ${env.deployment.tkn}
-mUSD       ${env.deployment.musd}
-SimpleAMM  ${env.deployment.amm}
-Pool       ${fmtAmount(tknReserve)} TKN / ${fmtAmount(musdReserve)} mUSD  (${fmtAmount((musdReserve * 10n ** 18n) / tknReserve)} mUSD per TKN)
+Chain          ${env.anvil.httpUrl}   (a new block every ${blockTime} s)
+TKN            ${env.deployment.tkn}
+mUSD           ${env.deployment.musd}
+SimpleAMM      ${env.deployment.amm}
+ObscuraAuction ${env.deployment.auction}
+Pool           ${fmtAmount(tknReserve)} TKN / ${fmtAmount(musdReserve)} mUSD  (${fmtAmount((musdReserve * 10n ** 18n) / tknReserve)} mUSD per TKN)
+Batches        commit ${commitBlocks} blocks, reveal ${revealBlocks}, solve ${solveBlocks}: about ${batchSeconds} s each
 
-Ready. In a second terminal run:  npm run demo:attack${port === 8545 ? "" : ` -- --rpc ${env.anvil.httpUrl}`}
-Press Ctrl+C here to stop the chain and the bot.
+Ready. In a second terminal run:
+  Act I   npm run demo:attack${rpcFlag}     an ordinary trade on SimpleAMM
+  Act II  npm run demo:defence${rpcFlag}    the same trade through Obscura
+Press Ctrl+C here to stop everything.
 `);
 
 let stopping = false;
