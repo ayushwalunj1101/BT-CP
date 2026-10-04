@@ -176,6 +176,19 @@ abstract contract ObscuraBase is ReentrancyGuard {
         if (!ok) revert EthTransferFailed();
     }
 
+    // ------------------------------------------------------------------ invariant I1
+
+    /// @notice I1, conservation: the contract really holds at least everything its ledger says it owes,
+    ///         in TKN, in mUSD and in ETH. "At least", so tokens sent to the contract by mistake cannot make
+    ///         it look broken.
+    function checkI1() public view virtual returns (bool) {
+        address base = address(baseToken);
+        address quote = address(quoteToken);
+        return baseToken.balanceOf(address(this)) >= totalFree[base] + totalLocked[base]
+            && quoteToken.balanceOf(address(this)) >= totalFree[quote] + totalLocked[quote] + feePool
+            && address(this).balance >= bondsHeld + totalClaimableEth + treasuryEth;
+    }
+
     // ------------------------------------------------------------------ internals
 
     function _requirePhase(uint256 epoch, Phase expected) internal view {
@@ -236,6 +249,7 @@ abstract contract ObscuraBase is ReentrancyGuard {
     /// @return quoteAmount mUSD paid by a buyer or received by a seller
     function _settleOrder(Order memory o, uint256 fill, uint256 price)
         internal
+        virtual
         returns (uint256 quoteAmount)
     {
         if (o.isBuy) {

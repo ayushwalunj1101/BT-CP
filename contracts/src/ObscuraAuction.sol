@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ObscuraBase} from "./ObscuraBase.sol";
+import {IObscuraInvariants} from "./interfaces/IObscuraInvariants.sol";
 import {Clearing, Fill, Order} from "./libraries/Clearing.sol";
 
 /// @title ObscuraAuction
@@ -17,7 +18,7 @@ import {Clearing, Fill, Order} from "./libraries/Clearing.sol";
 ///
 ///         Because every fill in a batch gets the same price, being first in the batch is worth nothing:
 ///         the queue a sandwich attack needs no longer exists.
-contract ObscuraAuction is ObscuraBase {
+contract ObscuraAuction is ObscuraBase, IObscuraInvariants {
     struct Commitment {
         address trader;
         bytes32 hash;
@@ -34,6 +35,10 @@ contract ObscuraAuction is ObscuraBase {
         uint256 price;
         uint256 volume;
         address solver;
+        uint256 reward;
+        /// @dev Change in the winning solver's ledger value across settlement, valued at `price` and scaled by
+        ///      1e18 (Δ mUSD × 1e18 + Δ TKN × price). Invariant I4 compares it with the declared reward.
+        int256 solverValueChange;
     }
 
     mapping(uint256 epoch => Commitment[]) internal _commitments;
@@ -218,6 +223,54 @@ contract ObscuraAuction is ObscuraBase {
         return Clearing.check(orders, price, fills);
     }
 
+    // ------------------------------------------------------------------ invariants
+    // Each check returns true for a batch that has not settled. The fuzzer asserts them after every call;
+    // InvariantBounty pays out to anyone who makes one false.
+
+    /// @inheritdoc ObscuraBase
+    function checkI1() public view override(ObscuraBase, IObscuraInvariants) returns (bool) {
+        return super.checkI1();
+    }
+
+    /// @notice I2, uniform price: every fill in `epoch` moved exactly base × p* in mUSD,
+    ///         rounded up for a buyer and down for a seller.
+    function checkI2(uint256 epoch) external view returns (bool) {
+        if (epochStatus[epoch] != Status.Settled) return true;
+        uint256 price = results[epoch].price;
+        Fill[] storage list = _fills[epoch];
+        for (uint256 i; i < list.length; ++i) {
+            Fill storage f = list[i];
+            uint256 expected =
+                f.isBuy ? Clearing.quoteUp(f.baseAmount, price) : Clearing.quoteDown(f.baseAmount, price);
+            if (f.quoteAmount != expected) return false;
+        }
+        return true;
+    }
+
+    /// @notice I3, limit respect: no buyer paid more than their limit allows, no seller received less,
+    ///         and no fill exceeded its order.
+    function checkI3(uint256 epoch) external view returns (bool) {
+        if (epochStatus[epoch] != Status.Settled) return true;
+        Fill[] storage list = _fills[epoch];
+        Order[] storage orders = _orders[epoch];
+        for (uint256 i; i < list.length; ++i) {
+            Fill storage f = list[i];
+            if (f.orderId >= orders.length) return false;
+            Order storage o = orders[f.orderId];
+            if (o.trader != f.trader || o.isBuy != f.isBuy || f.baseAmount > o.amount) return false;
+            if (f.isBuy && f.quoteAmount > Clearing.quoteUp(f.baseAmount, o.limitPrice)) return false;
+            if (!f.isBuy && f.quoteAmount < Clearing.quoteDown(f.baseAmount, o.limitPrice)) return false;
+        }
+        return true;
+    }
+
+    /// @notice I4, solver honesty: across settlement, the winning solver's ledger gained no more than the
+    ///         declared reward (its own trades in the batch, valued at p*, net to zero or less).
+    function checkI4(uint256 epoch) external view returns (bool) {
+        if (epochStatus[epoch] != Status.Settled) return true;
+        return results[epoch].solverValueChange <= int256(solverReward * Clearing.PRICE_SCALE);
+    }
+
     // ------------------------------------------------------------------ views
 
     function getCommitments(uint256 epoch) external view returns (Commitment[] memory) {
@@ -270,6 +323,7 @@ contract ObscuraAuction is ObscuraBase {
         uint256 volume,
         address solver
     ) private {
+        int256 solverValueBefore = _ledgerValue(solver, price);
         uint256 quotePaid = 0;
         uint256 quoteReceived = 0;
         Fill[] storage recorded = _fills[epoch];
@@ -281,20 +335,44 @@ contract ObscuraAuction is ObscuraBase {
             if (o.isBuy) quotePaid += quoteAmount;
             else quoteReceived += quoteAmount;
             recorded.push(
-                Fill({trader: o.trader, isBuy: o.isBuy, baseAmount: fill, quoteAmount: quoteAmount})
+                Fill({
+                    trader: o.trader,
+                    isBuy: o.isBuy,
+                    orderId: uint32(i), // i < maxOrders, far below 2^32
+                    baseAmount: fill,
+                    quoteAmount: quoteAmount
+                })
             );
             emit Filled(epoch, o.trader, o.isBuy, fill, quoteAmount);
         }
         feePool += quotePaid - quoteReceived; // rounding dust: buyers round up, sellers round down
 
-        uint256 reward = 0;
-        if (volume > 0) {
-            reward = solverReward < feePool ? solverReward : feePool;
+        uint256 reward = volume > 0 ? _rewardFor(volume) : 0;
+        if (reward > 0) {
             feePool -= reward;
             _creditFree(solver, address(quoteToken), reward);
         }
         epochStatus[epoch] = Status.Settled;
-        results[epoch] = EpochResult({price: price, volume: volume, solver: solver});
+        results[epoch] = EpochResult({
+            price: price,
+            volume: volume,
+            solver: solver,
+            reward: reward,
+            solverValueChange: _ledgerValue(solver, price) - solverValueBefore
+        });
         emit Settled(epoch, price, volume, solver, reward);
+    }
+
+    /// @dev The solver's reward for a batch with trades: the declared amount, or whatever the fee pool holds.
+    function _rewardFor(uint256) internal view virtual returns (uint256) {
+        return solverReward < feePool ? solverReward : feePool;
+    }
+
+    /// @dev Everything `account` holds in the ledger, valued at `price`, scaled by 1e18.
+    function _ledgerValue(address account, uint256 price) private view returns (int256) {
+        uint256 quote =
+            freeBalance[account][address(quoteToken)] + lockedBalance[account][address(quoteToken)];
+        uint256 base = freeBalance[account][address(baseToken)] + lockedBalance[account][address(baseToken)];
+        return int256(quote * Clearing.PRICE_SCALE + base * price);
     }
 }

@@ -14,8 +14,8 @@ Testnet only. No real funds at any stage.
 | 0 | Setup and spikes | Done |
 | 1 | Prove the problem (AMM + sandwich bot) | Done |
 | 2 | Build the defence (batch auction + solver) | Done |
-| 3 | Bounty vault + invariant fuzzing | Next |
-| 4 | Zero-knowledge clearing | |
+| 3 | Bounty vault + invariant fuzzing | Done |
+| 4 | Zero-knowledge clearing | Next |
 | 5 | Web app + Sepolia | |
 
 ## Prerequisites
@@ -50,6 +50,8 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run demo:up` | Starts a local chain (a block every 2 s), deploys both venues, and runs the sandwich bot, the solver and six simulated traders. Leave it running. |
 | `npm run demo:attack` | Act I: a victim trade on SimpleAMM. Needs `demo:up` running in another terminal. Options: `-- --side sell --amount 500 --slippage 50` |
 | `npm run demo:defence` | Act II: the same trade as a sealed order through Obscura. Same options as `demo:attack`. |
+| `npm run demo:bounty` | Act III: four planted bugs, one per rule, each making the bounty vault pay out automatically; the real contract never does. |
+| `npm run fuzz` | The long invariant campaign (1,000 runs × 300 random calls, about 10 minutes). Writes `results/fuzz-report.md`. |
 | `npm run harness` | Measures extraction over 100 random trades on both venues, with and without the bot, and writes CSVs to `results/`. Options: `-- --venue both --trades 100 --seed 1 --slippage 100 --min-size 50 --max-size 500` |
 | `npm run bot` | Runs only the bot, against a chain that is already running. |
 | `npm run solver` | Runs only the solver, against a chain that is already running. |
@@ -68,6 +70,8 @@ Two terminals, both in this folder:
 2. Act I: `npm run demo:attack` makes an ordinary trade on SimpleAMM and prints the block: bot, victim, bot.
 3. Act II: `npm run demo:defence` makes the same trade as a sealed Obscura order and follows it through one
    batch (about 22 s): what the bot sees, the clearing price, every fill at that price, and the bot's zero.
+4. Act III: `npm run demo:bounty` (needs no chain) runs the four planted bugs against the bounty vault.
+   `demo:up` also deploys the real vault with 10,000 mUSD and prints its address.
 
 Stop with Ctrl+C in the first terminal.
 
@@ -80,12 +84,16 @@ leftover chain (PowerShell: `Stop-Process -Name anvil`).
 ```
 contracts/
   src/ObscuraBase.sol       Deposit ledger, epoch clock, ETH bonds, settlement maths (no admin)
-  src/ObscuraAuction.sol    Commit, reveal, submitSolution, settle
+  src/ObscuraAuction.sol    Commit, reveal, submitSolution, settle, and the checks for I2 to I4
+  src/InvariantBounty.sol   The vault that pays whoever proves I1 to I4 broken (commit-reveal claims)
+  src/interfaces/           IObscuraInvariants: checkI1 to checkI4
   src/libraries/Clearing.sol  The rules a batch solution must obey, checked in one pass
   src/tokens/       MockERC20 (TKN and mUSD)
   src/amm/          SimpleAMM, the "normal exchange"
   script/           DeployLocal.s.sol
   test/unit/        Unit and fuzz tests per contract
+  test/bounty/      The vault's tests, including the four planted bugs
+  test/invariant/   The fuzzing handler, a Solidity reference solver, and the invariant suite
   test/vectors/     Commitment-hash vectors shared with the TypeScript tests
   test/spikes/      Spike B on-chain test and its generated verifier
   test/fixtures/    Proofs exported by the circuit scripts
@@ -209,6 +217,57 @@ Design fixes made while building (also in the implementation plan):
   cannot block settlement for everyone.
 - **No overflow on huge orders.** Recorded fills use full 256-bit amounts, because anyone can mint the
   test tokens and a giant order would otherwise not fit.
+
+## Stage 3 results: money on it
+
+### The four rules, checked on-chain
+
+| Rule | `checkIx` returns true when |
+|---|---|
+| I1 Conservation | The contract really holds at least what its ledger owes, in TKN, mUSD and ETH. "At least", so a donation cannot fake a violation. |
+| I2 Uniform price | Every fill in the batch moved exactly base × p* in mUSD, rounded up for buyers and down for sellers. |
+| I3 Limit respect | No buyer paid more than their limit allows, no seller received less, no fill exceeded its order. |
+| I4 Solver honesty | Across settlement, the winning solver's ledger gained no more than the declared reward (10 mUSD). |
+
+### The bounty vault
+
+`InvariantBounty` holds 10,000 mUSD of test funds and pays all of it to the first person who proves a rule
+broken. Nobody approves or can stop the payout: the vault calls the check itself. Claims are commit-reveal
+(attack A6): commit a hash that includes your address, then claim at least 2 blocks later. A bot copying
+the claim comes from another address, so its hash matches nothing.
+
+| Test (`npm run demo:bounty`) | Result |
+|---|---|
+| Correct auction after a real batch | No rule broken, every claim refused |
+| Tokens and ETH sent straight to the contract | No rule broken (I1 uses "at least") |
+| Planted I1 bug: a withdrawal that skips the ledger | Vault pays 10,000 mUSD |
+| Planted I2 bug: buyers charged their own limit, not p* | Vault pays 10,000 mUSD |
+| Planted I3 bug: sellers paid half the batch price | Vault pays 10,000 mUSD |
+| Planted I4 bug: solver pays itself double the reward | Vault pays 10,000 mUSD |
+| A bot copies a pending claim, and its commitment | Gets nothing; the researcher is paid |
+
+### Invariant fuzzing
+
+The fuzzer calls 13 random actions in random order (deposit, withdraw, commit, reveal, reveal all, honest
+solution, corrupted solution, settle, withdraw ETH, skip blocks, jump to the next window, donate, and a
+whole batch at once), and after every single call checks I1 to I4 plus three checks against bookkeeping
+the contract cannot influence: token and ETH balances against the full deposit and withdrawal history,
+the ledger total against that history exactly, and every person's balance adding up to the totals.
+
+From [`results/fuzz-report.md`](results/fuzz-report.md) (`npm run fuzz`):
+
+| | |
+|---|---|
+| Calls | 300,000 (1,000 runs × 300) |
+| Invariants broken | **0 of 7** |
+| Batches settled with trades | 20,422 |
+| Corrupted solutions submitted | 8,434 |
+| Batches voided | 1,550 |
+| Orders committed / revealed | 99,188 / 87,110 |
+
+Lesson from building it: the first version of the fuzzer "passed" while reaching settlement almost never
+(zero solutions in 65 runs), because random time jumps skipped the 2-block reveal window. A passing fuzzer
+proves nothing until you check how deep it got. The campaign now records that for every run.
 
 ## Conventions
 

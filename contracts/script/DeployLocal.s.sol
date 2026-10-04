@@ -6,10 +6,12 @@ import {MockERC20} from "../src/tokens/MockERC20.sol";
 import {SimpleAMM} from "../src/amm/SimpleAMM.sol";
 import {ObscuraBase} from "../src/ObscuraBase.sol";
 import {ObscuraAuction} from "../src/ObscuraAuction.sol";
+import {InvariantBounty} from "../src/InvariantBounty.sol";
 
 /// @title DeployLocal
-/// @notice Deploys everything to a local Anvil chain: the tokens, the "normal exchange" (SimpleAMM) and
-///         Obscura. Seeds the AMM pool and Obscura's fee pool, funds the test accounts, approves both venues
+/// @notice Deploys everything to a local Anvil chain: the tokens, the "normal exchange" (SimpleAMM),
+///         Obscura and its bounty vault. Seeds the AMM pool, Obscura's fee pool and the vault, funds the test
+///         accounts, approves both venues
 ///         for them, deposits into Obscura for the victim and the simulated traders, and writes the addresses
 ///         to a deployments JSON file.
 /// @dev Uses Anvil's public development mnemonic only, never a real key.
@@ -22,6 +24,9 @@ contract DeployLocal is Script {
     uint256 internal constant POOL_TKN = 100_000e18;
     uint256 internal constant POOL_MUSD = 10_000_000e18;
     uint256 internal constant FEE_POOL_MUSD = 100_000e18;
+    /// @dev Test funds in the bounty vault, and the blocks between committing and making a claim.
+    uint256 internal constant BOUNTY_MUSD = 10_000e18;
+    uint256 internal constant CLAIM_DELAY = 2;
 
     /// @dev Accounts 1 to 9 get enough of both tokens to trade in either direction on either venue.
     uint256 internal constant ACCOUNT_TKN = 100_000e18;
@@ -41,9 +46,12 @@ contract DeployLocal is Script {
         MockERC20 musd = new MockERC20("Mock USD", "mUSD");
         SimpleAMM amm = new SimpleAMM(tkn, musd);
         ObscuraAuction auction = new ObscuraAuction(tkn, musd, _localConfig());
+        InvariantBounty bounty = new InvariantBounty(auction, musd, CLAIM_DELAY);
 
         tkn.mint(deployer, POOL_TKN);
-        musd.mint(deployer, POOL_MUSD + FEE_POOL_MUSD);
+        musd.mint(deployer, POOL_MUSD + FEE_POOL_MUSD + BOUNTY_MUSD);
+        musd.approve(address(bounty), BOUNTY_MUSD);
+        bounty.fund(BOUNTY_MUSD);
         tkn.approve(address(amm), POOL_TKN);
         musd.approve(address(amm), POOL_MUSD);
         amm.addLiquidity(POOL_TKN, POOL_MUSD);
@@ -76,7 +84,8 @@ contract DeployLocal is Script {
         vm.serializeAddress(obj, "tkn", address(tkn));
         vm.serializeAddress(obj, "musd", address(musd));
         vm.serializeAddress(obj, "amm", address(amm));
-        string memory json = vm.serializeAddress(obj, "auction", address(auction));
+        vm.serializeAddress(obj, "auction", address(auction));
+        string memory json = vm.serializeAddress(obj, "bounty", address(bounty));
         vm.writeJson(json, outFile);
     }
 

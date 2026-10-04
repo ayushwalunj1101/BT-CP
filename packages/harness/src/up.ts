@@ -30,12 +30,13 @@ const env = await startLocalEnv({
   seed: Date.now() % 1_000_000,
 });
 
-const [tknReserve, musdReserve, commitBlocks, revealBlocks, solveBlocks] = await Promise.all([
+const [tknReserve, musdReserve, commitBlocks, revealBlocks, solveBlocks, vault] = await Promise.all([
   read<bigint>(env.amm, "reserve0"),
   read<bigint>(env.amm, "reserve1"),
   read<bigint>(env.auction, "commitBlocks"),
   read<bigint>(env.auction, "revealBlocks"),
   read<bigint>(env.auction, "solveBlocks"),
+  read<bigint>(env.bounty, "vaultBalance"),
 ]);
 const batchSeconds = Number(commitBlocks + revealBlocks + solveBlocks) * blockTime;
 const rpcFlag = port === 8545 ? "" : ` -- --rpc ${env.anvil.httpUrl}`;
@@ -45,12 +46,14 @@ TKN            ${env.deployment.tkn}
 mUSD           ${env.deployment.musd}
 SimpleAMM      ${env.deployment.amm}
 ObscuraAuction ${env.deployment.auction}
+Bounty vault   ${env.deployment.bounty}   holds ${fmtAmount(vault)} mUSD for anyone who breaks I1 to I4
 Pool           ${fmtAmount(tknReserve)} TKN / ${fmtAmount(musdReserve)} mUSD  (${fmtAmount((musdReserve * 10n ** 18n) / tknReserve)} mUSD per TKN)
 Batches        commit ${commitBlocks} blocks, reveal ${revealBlocks}, solve ${solveBlocks}: about ${batchSeconds} s each
 
 Ready. In a second terminal run:
-  Act I   npm run demo:attack${rpcFlag}     an ordinary trade on SimpleAMM
-  Act II  npm run demo:defence${rpcFlag}    the same trade through Obscura
+  Act I    npm run demo:attack${rpcFlag}     an ordinary trade on SimpleAMM
+  Act II   npm run demo:defence${rpcFlag}    the same trade through Obscura
+  Act III  npm run demo:bounty     planted bugs make the vault pay out; the real contract never does
 Press Ctrl+C here to stop everything.
 `);
 

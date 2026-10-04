@@ -433,7 +433,7 @@ contract ObscuraAuctionTest is Test {
         assertEq(_free(solver, musd), 100_000e18 + REWARD);
         assertEq(auction.claimableEth(solver), SOLVER_BOND);
 
-        (uint256 price, uint256 volume, address winner) = auction.results(0);
+        (uint256 price, uint256 volume, address winner,,) = auction.results(0);
         assertEq(price, 101e18);
         assertEq(volume, 10e18);
         assertEq(winner, solver);
@@ -455,7 +455,7 @@ contract ObscuraAuctionTest is Test {
         assertEq(auction.claimableEth(keeper), SOLVER_BOND / 2, "half to whoever exposed it");
         assertEq(auction.treasuryEth(), SOLVER_BOND / 2, "half burned");
         assertEq(auction.claimableEth(mallory), 0);
-        (,, address winner) = auction.results(0);
+        (,, address winner,,) = auction.results(0);
         assertEq(winner, solver);
         _assertConservation();
     }
@@ -490,7 +490,7 @@ contract ObscuraAuctionTest is Test {
         _rollTo(0, ObscuraBase.Phase.Settleable);
         _settle(0);
 
-        (, uint256 volume, address winner) = auction.results(0);
+        (, uint256 volume, address winner,,) = auction.results(0);
         assertEq(volume, 10e18);
         assertEq(winner, solver);
         assertEq(

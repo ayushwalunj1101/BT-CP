@@ -24,6 +24,8 @@
     "bot": "tsx packages/bot/src/cli.ts",
     "solver": "tsx packages/solver/src/cli.ts",
     "vectors": "tsx packages/shared/scripts/gen-vectors.ts",
+    "fuzz": "node scripts/fuzz.mjs",
+    "demo:bounty": "forge test --root contracts --match-contract InvariantBountyTest -vv",
     "harness": "tsx packages/harness/src/measure.ts",
     "spike:ordering": "vitest run spikes/ordering",
     "spike:zk": "node circuits/spikes/spike-b.mjs"

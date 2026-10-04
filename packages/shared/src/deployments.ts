@@ -13,6 +13,7 @@ export type Deployment = {
   musd: string;
   amm: string;
   auction: string;
+  bounty: string;
 };
 
 export function deploymentPath(chainId: number = ANVIL_CHAIN_ID): string {
@@ -36,6 +37,7 @@ export function loadDeployment(file: string = deploymentPath()): Deployment {
     musd: address("musd"),
     amm: address("amm"),
     auction: address("auction"),
+    bounty: address("bounty"),
   };
 }
 

@@ -15,6 +15,7 @@ struct Order {
 struct Fill {
     address trader;
     bool isBuy;
+    uint32 orderId; // index of the order in its batch, so a check can compare the fill with the order
     uint256 baseAmount; // TKN bought or sold
     uint256 quoteAmount; // mUSD paid by a buyer, or received by a seller
 }

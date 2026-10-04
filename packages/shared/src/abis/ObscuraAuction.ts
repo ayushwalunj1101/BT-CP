@@ -147,6 +147,76 @@ export const ObscuraAuctionAbi = [
   },
   {
     "type": "function",
+    "name": "checkI1",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkI2",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkI3",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkI4",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "claimableEth",
     "inputs": [
       {
@@ -453,6 +523,11 @@ export const ObscuraAuctionAbi = [
             "internalType": "bool"
           },
           {
+            "name": "orderId",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
             "name": "baseAmount",
             "type": "uint256",
             "internalType": "uint256"
@@ -656,6 +731,16 @@ export const ObscuraAuctionAbi = [
         "name": "solver",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "reward",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "solverValueChange",
+        "type": "int256",
+        "internalType": "int256"
       }
     ],
     "stateMutability": "view"

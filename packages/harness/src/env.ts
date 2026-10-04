@@ -6,6 +6,7 @@ import {
   ANVIL_CHAIN_ID,
   type AnvilHandle,
   type Deployment,
+  InvariantBountyAbi,
   MockERC20Abi,
   type Mining,
   ObscuraAuctionAbi,
@@ -27,6 +28,7 @@ export type LocalEnv = {
   deployment: Deployment;
   amm: Contract;
   auction: Contract;
+  bounty: Contract;
   tkn: Contract;
   musd: Contract;
   bot: SandwichBot;
@@ -101,6 +103,7 @@ export async function startLocalEnv(options: LocalEnvOptions): Promise<LocalEnv>
       deployment,
       amm,
       auction: new Contract(deployment.auction, ObscuraAuctionAbi, provider),
+      bounty: new Contract(deployment.bounty, InvariantBountyAbi, provider),
       tkn: new Contract(deployment.tkn, MockERC20Abi, provider),
       musd: new Contract(deployment.musd, MockERC20Abi, provider),
       bot,
