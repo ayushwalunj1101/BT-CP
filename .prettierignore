@@ -1,0 +1,4 @@
+contracts/
+circuits/build/
+node_modules/
+*.md

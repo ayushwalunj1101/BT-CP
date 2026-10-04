@@ -1,0 +1,34 @@
+{
+  "name": "obscura",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-chain dark pool: sealed orders, uniform-price batch auctions, and a self-paying invariant bounty. Testnet only.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:contracts": "forge test --root contracts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "chain": "anvil --block-time 4",
+    "spike:ordering": "vitest run spikes/ordering",
+    "spike:zk": "node circuits/spikes/spike-b.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "circomlib": "^2.0.5",
+    "ethers": "^6.17.0",
+    "prettier": "^3.9.9",
+    "snarkjs": "^0.7.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "underscore": "^1.13.8"
+  }
+}

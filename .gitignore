@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Secrets: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Circuit build output and trusted-setup files (rebuilt by scripts)
+circuits/build/
+*.ptau
+*.zkey
+
+# Test and tool output
+coverage/
+*.log
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
