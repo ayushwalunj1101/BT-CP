@@ -1,4 +1,6 @@
 contracts/
 circuits/build/
 node_modules/
+packages/shared/src/abis/
+results/
 *.md

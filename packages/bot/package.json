@@ -1,0 +1,14 @@
+{
+  "name": "@obscura/bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The adversary: a mempool-watching sandwich bot used to demonstrate the attack Obscura prevents.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@obscura/shared": "*",
+    "ethers": "^6.17.0"
+  }
+}

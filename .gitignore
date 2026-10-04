@@ -11,6 +11,10 @@ circuits/build/
 *.ptau
 *.zkey
 
+# Local chain deployments change on every run; Sepolia deployments are committed
+deployments/31337.json
+deployments/test-*.json
+
 # Test and tool output
 coverage/
 *.log

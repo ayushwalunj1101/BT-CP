@@ -1,0 +1,15 @@
+{
+  "name": "@obscura/harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo environment, victim trades, and the measurement harness that produces the extraction figure.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@obscura/bot": "*",
+    "@obscura/shared": "*",
+    "ethers": "^6.17.0"
+  }
+}

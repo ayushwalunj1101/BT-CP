@@ -16,6 +16,12 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "chain": "anvil --block-time 4",
+    "abis": "forge build --root contracts && node packages/shared/scripts/gen-abis.mjs",
+    "deploy:local": "cd contracts && forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast",
+    "demo:up": "tsx packages/harness/src/up.ts",
+    "demo:attack": "tsx packages/harness/src/attack.ts",
+    "bot": "tsx packages/bot/src/cli.ts",
+    "harness": "tsx packages/harness/src/measure.ts",
     "spike:ordering": "vitest run spikes/ordering",
     "spike:zk": "node circuits/spikes/spike-b.mjs"
   },
@@ -25,6 +31,7 @@
     "ethers": "^6.17.0",
     "prettier": "^3.9.9",
     "snarkjs": "^0.7.6",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },

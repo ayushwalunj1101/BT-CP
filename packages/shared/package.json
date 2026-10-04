@@ -1,0 +1,13 @@
+{
+  "name": "@obscura/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Code every Obscura service shares: ABIs, deployments, accounts, chain helpers, AMM maths.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0"
+  }
+}
