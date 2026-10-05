@@ -23,6 +23,8 @@ export function parseAmount(text: string): bigint | null {
 
 /** The short, readable part of a viem/wagmi error. A decoded contract error comes back as Name(args). */
 export function errorText(err: unknown): string {
+  if ((err as { name?: string } | undefined)?.name === "ProviderNotFoundError")
+    return "No wallet in this browser. Open this page in the browser where MetaMask is installed.";
   let link = err as { data?: { errorName?: string; args?: readonly unknown[] }; cause?: unknown } | undefined;
   for (let depth = 0; link && depth < 10; depth++) {
     if (link.data?.errorName)

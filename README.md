@@ -49,7 +49,7 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run format` | Formats TypeScript and JSON with Prettier. Use `forge fmt` inside `contracts/` for Solidity. |
 | `npm run web` | Starts the website on http://localhost:3000 (run `demo:up` first for the local chain). |
 | `npm run deploy:sepolia` | Deploys everything to Sepolia and verifies it on Etherscan. Add `-- --dry-run` to rehearse on a local chain first. |
-| `npm run sepolia:services` | Runs both solvers and the ZK inbox against Sepolia, for the live demo. |
+| `npm run sepolia:services` | Runs both solvers, the ZK inbox and a market maker against Sepolia, for the live demo. Add `-- --no-market-maker` to run the solvers only. |
 | `npm run demo:up` | Starts a local chain (a block every 2 s), deploys both venues, and runs the sandwich bot, the solver and six simulated traders. Leave it running. |
 | `npm run demo:attack` | Act I: a victim trade on SimpleAMM. Needs `demo:up` running in another terminal. Options: `-- --side sell --amount 500 --slippage 50` |
 | `npm run demo:defence` | Act II: the same trade as a sealed order through Obscura. Same options as `demo:attack`. |
@@ -405,7 +405,31 @@ local chain running, reads the Sepolia vault (10,000.00 mUSD).
 
 On Sepolia a batch takes about 2 minutes (11 blocks of 12 s). The ZK inbox runs on the laptop that runs
 `sepolia:services`, so private (ZK) orders can be placed from that machine's browser; the commit-reveal auction,
-explorer and bounty board work from anywhere.
+explorer and bounty board work from anywhere. Trade from a MetaMask account other than the deployer: the
+deployer is also the v1 solver, and its transactions would compete with yours.
+
+### Trading alone: the market maker
+
+A batch needs a buyer and a seller. Locally the six simulated traders provide them; on Sepolia,
+`sepolia:services` runs a market maker instead, so one person can trade alone and still be filled.
+
+- It wakes up when someone else commits to a batch, and in that same batch quotes 100 TKN each side, 0.5%
+  either side of the AMM price (99.50 and 100.50 while the pool sits at 100). It keeps quoting for the next
+  two batches, then goes quiet. While nobody trades it sends nothing, so it costs nothing.
+- Its buy and sell never cross each other, so it only trades with other people, at the auction's price. A buy
+  with a limit of 100.50 or more, or a sell at 99.50 or less, is filled.
+- It uses two accounts derived from the deployer's key (one buys, one sells), topped up with 0.01 ETH each
+  when low. On the ZK auction it sends its orders privately to the solver like any trader.
+- It needs your order early enough in the commit window to answer in the same batch: commit while at least
+  two blocks (about 25 s) remain. A later order is not lost; it is refunded unfilled, and the market maker is
+  already quoting in the next two batches.
+
+When nothing crosses in a ZK batch, the solver no longer submits a proof of zero fills (about 1.4 M gas for
+nothing); the batch settles as voided and every order's funds and bond are released.
+
+Tested on a local chain (`packages/harness/test/marketMaker.test.ts`): it sends nothing while nobody else
+trades; a lone buy of 10 TKN at limit 101 is filled at the market maker's ask (100.50) on both auctions; and in
+the following ZK batch it quotes alone, no proof is made, and its funds are released.
 
 ## Conventions
 

@@ -4,3 +4,4 @@ export * from "./measurement.ts";
 export * from "./obscuraMeasurement.ts";
 export * from "./traders.ts";
 export * from "./victim.ts";
+export * from "./marketMaker.ts";

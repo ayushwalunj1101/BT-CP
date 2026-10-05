@@ -73,7 +73,7 @@ export class ZkSolver {
     }));
   }
 
-  /** Clear, prove and submit `epoch`. Null when the solver holds no valid order for it. */
+  /** Clear, prove and submit `epoch`. Null when the solver holds no valid order for it, or nothing crosses. */
   async solve(epoch: bigint): Promise<ZkSubmission | null> {
     this.solved.add(epoch);
     const slots = await this.slots(epoch);
@@ -86,6 +86,11 @@ export class ZkSolver {
     if (included === 0) return null;
 
     const cleared = solveZkBatch(epoch, slots, openings);
+    // Nothing crosses: a proof would only record zero fills. Without one, settle() releases every order.
+    if (cleared.volumeLots === 0n) {
+      this.log(`epoch ${epoch}: ${included} orders, none cross. No proof needed; settle will release them.`);
+      return null;
+    }
     const proof = await proveClearing(cleared.input);
     const tx = await this.auction.getFunction("submitProof")(
       epoch,
