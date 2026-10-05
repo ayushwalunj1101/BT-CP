@@ -26,7 +26,9 @@ if (!SEPOLIA_RPC_URL || !DEPLOYER_PRIVATE_KEY)
 
 const deployment = loadDeployment(deploymentPath(SEPOLIA_CHAIN_ID));
 const provider = httpProvider(SEPOLIA_RPC_URL, SEPOLIA_CHAIN_ID);
-const deployer = new Wallet(DEPLOYER_PRIVATE_KEY, provider);
+// MetaMask shows private keys without the 0x prefix; ethers needs it.
+const deployerKey = DEPLOYER_PRIVATE_KEY.trim();
+const deployer = new Wallet(deployerKey.startsWith("0x") ? deployerKey : `0x${deployerKey}`, provider);
 const zkWallet = new Wallet(
   keccak256(concat([deployer.privateKey, toUtf8Bytes("obscura-zk-solver")])),
   provider,

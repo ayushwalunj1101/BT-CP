@@ -8,7 +8,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,8 @@ if (dryRun) {
   // Anvil's development key 0, on a throwaway chain that reports Sepolia's chain id.
   const port = 8611;
   const out = join(root, "deployments", "test-sepolia-dry-run.json");
+  // Keep the rehearsal's transaction records out of contracts/broadcast, which holds the real Sepolia deploy.
+  const broadcast = join(tmpdir(), "obscura-dry-run-broadcast");
   const anvil = spawn(tool("anvil"), ["--port", String(port), "--chain-id", "11155111", "--quiet"], {
     stdio: "ignore",
   });
@@ -55,6 +57,7 @@ if (dryRun) {
       {
         DEPLOYER_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
         DEPLOYMENTS_FILE: out,
+        FOUNDRY_BROADCAST: broadcast,
       },
       [],
     );
@@ -63,6 +66,7 @@ if (dryRun) {
   } finally {
     anvil.kill();
     rmSync(out, { force: true });
+    rmSync(broadcast, { recursive: true, force: true });
   }
   process.exit(0);
 }
@@ -78,6 +82,9 @@ if (missing.length) {
   console.error(`Missing in .env: ${missing.join(", ")}`);
   process.exit(1);
 }
+// MetaMask shows private keys without the 0x prefix; Foundry needs it.
+const key = process.env.DEPLOYER_PRIVATE_KEY.trim();
+process.env.DEPLOYER_PRIVATE_KEY = key.startsWith("0x") ? key : `0x${key}`;
 
 const verify = process.env.ETHERSCAN_API_KEY
   ? ["--verify", "--etherscan-api-key", process.env.ETHERSCAN_API_KEY]

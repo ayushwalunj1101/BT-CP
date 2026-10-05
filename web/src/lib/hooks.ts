@@ -7,7 +7,31 @@ import { useChainId } from "wagmi";
 import { getBlockNumber } from "wagmi/actions";
 import { type Clock, type Phase, epochAt, phaseAt, phaseStart } from "./clock";
 import { read } from "./tx";
-import { config } from "./wagmi";
+import { LOCAL_RPC_URL, config } from "./wagmi";
+
+/**
+ * Whether the local development chain (Anvil, chain id 31337) is answering, checked every 10 seconds.
+ * Undefined until the first check finishes.
+ */
+export function useLocalChainUp(): boolean | undefined {
+  return useQuery({
+    queryKey: ["local-chain-up"],
+    queryFn: async () => {
+      try {
+        const res = await fetch(LOCAL_RPC_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+          signal: AbortSignal.timeout(2_000),
+        });
+        return ((await res.json()) as { result?: string }).result === "0x7a69";
+      } catch {
+        return false;
+      }
+    },
+    refetchInterval: 10_000,
+  }).data;
+}
 
 /** The latest block, refreshed every second. */
 export function useBlock() {

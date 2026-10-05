@@ -16,7 +16,7 @@ Testnet only. No real funds at any stage.
 | 2 | Build the defence (batch auction + solver) | Done |
 | 3 | Bounty vault + invariant fuzzing | Done |
 | 4 | Zero-knowledge clearing | Done |
-| 5 | Web app + Sepolia | Website done; Sepolia deployment ready to run (needs your `.env`) |
+| 5 | Web app + Sepolia | Done: website built, all 7 contracts live and verified on Sepolia |
 
 ## Prerequisites
 
@@ -360,6 +360,8 @@ sound as long as at least one contributor discarded their secret.
 
 Run it locally: `npm run demo:up` in one terminal, `npm run web` in another, open http://localhost:3000 and click
 **Local test account** (Anvil's account #0, which Anvil signs for, so no key is involved). MetaMask works too.
+The local test account is only offered while the local chain is running. Without it, visitors see Sepolia, and a
+wallet on any other network gets a **Switch to Sepolia** button.
 
 Tested in a real browser (Playwright) against the live local chain: connect, get test tokens, deposit; a sealed
 order revealed automatically and filled at the batch price (99.75, limit 101); a private ZK order proved and
@@ -367,6 +369,26 @@ filled (99.56) with the balance unlocked to the wei; the batch explorer; a bount
 message; a swap on the normal exchange sandwiched by the bot (100.00 bps); and the layout at phone width.
 Bugs found and fixed while testing: the test wallet disconnected on reload, and contract errors showed as raw
 bytes instead of names (calls are now simulated first, so errors are decoded before anything is sent).
+
+### Live on Sepolia
+
+Deployed on 2026-10-05 from `0xcaa820b6b11a5855272784911a3823fc2ff8F79F` (a project-only test account) in 18
+transactions, costing 0.0124 Sepolia ETH at about 1.1 gwei. All seven contracts are verified on Etherscan and
+Sourcify. Addresses are in `deployments/11155111.json`; the transaction record is in `contracts/broadcast/`.
+
+| Contract | Address |
+|---|---|
+| TKN (MockERC20) | [0xFeE1a32C43aF0f1aCaa03696bA5Cd54a03c96820](https://sepolia.etherscan.io/address/0xFeE1a32C43aF0f1aCaa03696bA5Cd54a03c96820#code) |
+| mUSD (MockERC20) | [0xA7C4e40E54EE2EDfd066e5219ebF5de2638e4021](https://sepolia.etherscan.io/address/0xA7C4e40E54EE2EDfd066e5219ebF5de2638e4021#code) |
+| SimpleAMM | [0x8228d8936825C81861642e598af0acAC1b638d61](https://sepolia.etherscan.io/address/0x8228d8936825C81861642e598af0acAC1b638d61#code) |
+| ObscuraAuction | [0x81854dc3F454861666775c2bDBC25FE88C2CA1E3](https://sepolia.etherscan.io/address/0x81854dc3F454861666775c2bDBC25FE88C2CA1E3#code) |
+| InvariantBounty | [0xce702a588F9500a88cA10207537B438bf5dBac61](https://sepolia.etherscan.io/address/0xce702a588F9500a88cA10207537B438bf5dBac61#code) |
+| ClearingVerifier | [0xced41ee853A886EF3b73581fc60335832f7512b4](https://sepolia.etherscan.io/address/0xced41ee853A886EF3b73581fc60335832f7512b4#code) |
+| ObscuraAuctionZK | [0x127FDc54e93eFEeE20a03C71CC741c8d50E00f04](https://sepolia.etherscan.io/address/0x127FDc54e93eFEeE20a03C71CC741c8d50E00f04#code) |
+
+Checked on-chain after deploying: the AMM pool holds 100,000 TKN and 10,000,000 mUSD (price 100), each auction's
+fee pool holds 100,000 mUSD, and the bounty vault holds 10,000 mUSD. The website, with no wallet connected and no
+local chain running, reads the Sepolia vault (10,000.00 mUSD).
 
 ### Going live on Sepolia (your steps)
 
