@@ -54,12 +54,17 @@ export class Solver {
     return raw.map((o) => ({ trader: o.trader, isBuy: o.isBuy, limitPrice: o.limitPrice, amount: o.amount }));
   }
 
-  /** Compute and submit a solution for `epoch`. Null when no order was revealed. */
+  /** Compute and submit a solution for `epoch`. Null when no order was revealed, or nothing crosses. */
   async solve(epoch: bigint): Promise<SubmittedSolution | null> {
     this.solved.add(epoch);
     const orders = await this.orders(epoch);
     const clearing = clearBatch(orders);
     if (!clearing) return null;
+    // Nothing crosses: a solution would only record zero fills. Without one, settle() releases every order.
+    if (clearing.volume === 0n) {
+      this.log(`epoch ${epoch}: ${orders.length} orders, none cross. Nothing to submit.`);
+      return null;
+    }
 
     // Run the exact check settle() will run, so a bug here never costs us the bond.
     const [ok] = await read<[boolean, bigint]>(

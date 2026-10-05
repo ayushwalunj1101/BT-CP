@@ -7,8 +7,16 @@ import { useConnection } from "wagmi";
 import { CONTRACT_PHASES } from "@/lib/clock";
 import { useDeployment } from "@/lib/deployment";
 import { errorText, fmt, parseAmount } from "@/lib/format";
-import { type BatchNow, useBatchNow, usePoll } from "@/lib/hooks";
-import { LOT, TICK, type ZkOrder, randomFieldSalt, sendToSolver, zkCommitment } from "@/lib/orders";
+import { type BatchNow, useBatchNow, useFreeBalance, usePoll } from "@/lib/hooks";
+import {
+  LOT,
+  QUOTE_UNIT,
+  TICK,
+  type ZkOrder,
+  randomFieldSalt,
+  sendToSolver,
+  zkCommitment,
+} from "@/lib/orders";
 import { type Ticket, useTickets } from "@/lib/tickets";
 import { read, send } from "@/lib/tx";
 import { ZK_INBOX_URL } from "@/lib/wagmi";
@@ -76,6 +84,7 @@ function SealZkOrder({
   onSent: (txHash: string) => void;
 }) {
   const { address } = useConnection();
+  const { deployment } = useDeployment();
   const [isBuy, setIsBuy] = useState(true);
   const [amount, setAmount] = useState("10");
   const [limit, setLimit] = useState("101");
@@ -100,8 +109,13 @@ function SealZkOrder({
   const lots = amountWei ? amountWei / LOT : 0n;
   const ticks = limitWei ? limitWei / TICK : 0n;
   const open = now?.phase === "Commit";
+  // The solver can only fill an order that the balance locked at commit covers (the circuit checks it).
+  const needed = isBuy ? lots * ticks * QUOTE_UNIT : lots * LOT;
+  const symbol = isBuy ? "mUSD" : "TKN";
+  const free = useFreeBalance(auction, isBuy ? deployment?.musd : deployment?.tkn);
+  const short = needed > 0n && free !== undefined && free < needed;
   const canSeal =
-    !!address && !!auction && open && lots > 0n && ticks > 0n && !!info && !info.committed && !busy;
+    !!address && !!auction && open && lots > 0n && ticks > 0n && !!info && !info.committed && !short && !busy;
 
   const seal = async () => {
     setError(null);
@@ -194,6 +208,13 @@ function SealZkOrder({
         )}
         {info?.committed && <span className="small muted">You already have an order in this batch.</span>}
       </div>
+      {short && !info?.committed && (
+        <p className="note bad">
+          Deposit first: this order needs {fmt(needed)} {symbol} free on this auction, and you have{" "}
+          {fmt(free!)}. The solver can only fill an order your locked balance covers; otherwise it is left out
+          and its bond is lost.
+        </p>
+      )}
       {busy && <p className="small muted">{busy}</p>}
       {error && <p className="note bad">{error}</p>}
       {sealed && (

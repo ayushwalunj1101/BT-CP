@@ -424,8 +424,13 @@ A batch needs a buyer and a seller. Locally the six simulated traders provide th
   two blocks (about 25 s) remain. A later order is not lost; it is refunded unfilled, and the market maker is
   already quoting in the next two batches.
 
-When nothing crosses in a ZK batch, the solver no longer submits a proof of zero fills (about 1.4 M gas for
-nothing); the batch settles as voided and every order's funds and bond are released.
+When nothing crosses in a batch, neither solver submits anything: no zero-volume solution on the commit-reveal
+auction (it would lock a 0.01 ETH bond and cost gas), and no proof of zero fills on the ZK auction (about
+1.4 M gas). The batch settles as voided and every order's funds and bond are released.
+
+The first live order on Sepolia (batch 23) was committed before depositing, so it could not be revealed (a
+reveal locks the order's funds from the Obscura balance) and its 0.0005 ETH bond was forfeited. The order
+forms now check the free balance and refuse to seal an order it cannot cover, saying how much to deposit.
 
 Tested on a local chain (`packages/harness/test/marketMaker.test.ts`): it sends nothing while nobody else
 trades; a lone buy of 10 TKN at limit 101 is filled at the market maker's ask (100.50) on both auctions; and in

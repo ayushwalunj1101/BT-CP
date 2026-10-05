@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ObscuraAuctionAbi } from "@obscura/shared/abis";
 import type { Abi, Address } from "viem";
-import { useChainId } from "wagmi";
+import { useChainId, useConnection } from "wagmi";
 import { getBlockNumber } from "wagmi/actions";
 import { type Clock, type Phase, epochAt, phaseAt, phaseStart } from "./clock";
 import { read } from "./tx";
@@ -88,6 +88,22 @@ export function useBatchNow(auction: Address | undefined): BatchNow | undefined 
         ? phaseStart(clock, epoch, "Solve")
         : phaseStart(clock, epoch, "Settleable");
   return { clock, next, epoch, phase, blocksLeft: ends - next };
+}
+
+/** How much of `token` the connected account has free (deposited, not locked) in `auction`. */
+export function useFreeBalance(auction: Address | undefined, token: Address | undefined): bigint | undefined {
+  const { address } = useConnection();
+  return usePoll(
+    ["free", auction, address, token],
+    () =>
+      read<bigint>({
+        address: auction!,
+        abi: ObscuraAuctionAbi as Abi,
+        functionName: "freeBalance",
+        args: [address, token],
+      }),
+    !!auction && !!address && !!token,
+  ).data;
 }
 
 /** Poll a read every couple of seconds. */

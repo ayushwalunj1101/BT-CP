@@ -39,6 +39,8 @@ export function randomSalt(): `0x${string}` {
 /** 1 lot = 0.001 TKN; 1 tick = 0.01 mUSD per TKN. */
 export const LOT = 10n ** 15n;
 export const TICK = 10n ** 16n;
+/** mUSD wei for 1 lot at 1 tick. */
+export const QUOTE_UNIT = 10n ** 13n;
 
 export type ZkOrder = { isBuy: boolean; limitTicks: bigint; amountLots: bigint; salt: bigint };
 

@@ -7,7 +7,7 @@ import { useConnection } from "wagmi";
 import { CONTRACT_PHASES, phaseStart } from "@/lib/clock";
 import { useDeployment } from "@/lib/deployment";
 import { errorText, fmt, parseAmount, short } from "@/lib/format";
-import { type BatchNow, useBatchNow, usePoll } from "@/lib/hooks";
+import { type BatchNow, useBatchNow, useFreeBalance, usePoll } from "@/lib/hooks";
 import { commitmentHash, randomSalt } from "@/lib/orders";
 import { type Ticket, downloadTicket, useTickets } from "@/lib/tickets";
 import { read, send } from "@/lib/tx";
@@ -95,6 +95,7 @@ function SealOrder({
   onSealed: (t: Ticket) => void;
 }) {
   const { address } = useConnection();
+  const { deployment } = useDeployment();
   const [isBuy, setIsBuy] = useState(true);
   const [amount, setAmount] = useState("10");
   const [limit, setLimit] = useState("101");
@@ -111,13 +112,19 @@ function SealOrder({
   const amountWei = parseAmount(amount);
   const limitWei = parseAmount(limit);
   const open = now?.phase === "Commit";
-  const canSeal = !!address && !!auction && open && !!amountWei && !!limitWei && bond !== undefined && !busy;
-  const lockText =
+  // What the reveal will lock, exactly as the contract computes it (a buy rounds up).
+  const needed =
     amountWei && limitWei
       ? isBuy
-        ? `${fmt((amountWei * limitWei) / 10n ** 18n)} mUSD`
-        : `${fmt(amountWei)} TKN`
-      : "…";
+        ? (amountWei * limitWei + 10n ** 18n - 1n) / 10n ** 18n
+        : amountWei
+      : undefined;
+  const symbol = isBuy ? "mUSD" : "TKN";
+  const free = useFreeBalance(auction, isBuy ? deployment?.musd : deployment?.tkn);
+  const short = needed !== undefined && free !== undefined && free < needed;
+  const canSeal =
+    !!address && !!auction && open && !!amountWei && !!limitWei && bond !== undefined && !short && !busy;
+  const lockText = needed !== undefined ? `${fmt(needed)} ${symbol}` : "…";
 
   const seal = async () => {
     setBusy(true);
@@ -203,6 +210,12 @@ function SealOrder({
           <span className="small muted">Sealing opens with the next batch&apos;s commit window.</span>
         )}
       </div>
+      {short && (
+        <p className="note bad">
+          Deposit first: this order needs {lockText} free in Obscura, and you have {fmt(free!)}. Its reveal
+          locks that amount, so without it the order could not be revealed and its bond would be lost.
+        </p>
+      )}
       {error && <p className="note bad">{error}</p>}
       {sealed && (
         <div className="note good" style={{ marginTop: "0.75rem" }}>
