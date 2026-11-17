@@ -6,6 +6,8 @@ const config: NextConfig = {
   transpilePackages: ["@obscura/shared"],
   // Types are checked by `npm run typecheck` (TypeScript 7) rather than during `next build`.
   typescript: { ignoreBuildErrors: true },
+  // No "N" badge on screen during development, so live demos stay clean. Errors still show.
+  devIndicators: false,
 };
 
 export default config;

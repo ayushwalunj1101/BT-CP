@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
+import { Red_Hat_Display, Red_Hat_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import { Header } from "@/components/Header";
+import { SheetLabel } from "@/components/SheetLabel";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans" });
-const serif = Source_Serif_4({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-serif" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "600"], variable: "--font-mono" });
+const sans = Red_Hat_Display({ subsets: ["latin"], variable: "--font-sans" });
+const mono = Red_Hat_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Obscura",
@@ -16,11 +16,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
         <Providers>
+          <Header />
           <div className="shell">
-            <Header />
+            <SheetLabel />
             <main>{children}</main>
           </div>
         </Providers>

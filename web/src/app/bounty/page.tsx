@@ -58,6 +58,7 @@ export default function BountyPage() {
     },
     !!bounty && !!auction && !!now,
     3_000,
+    true,
   ).data;
 
   return (

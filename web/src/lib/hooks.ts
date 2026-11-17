@@ -106,7 +106,30 @@ export function useFreeBalance(auction: Address | undefined, token: Address | un
   ).data;
 }
 
-/** Poll a read every couple of seconds. */
-export function usePoll<T>(key: unknown[], fn: () => Promise<T>, enabled = true, ms = 2_000) {
-  return useQuery({ queryKey: key, queryFn: fn, enabled, refetchInterval: ms });
+/**
+ * Poll a read every couple of seconds. With `keepWhileLastChanges`, the previous result stays on screen
+ * while only the key's last part changes (for example the batch number), instead of flashing a loading
+ * state every batch. A change in any other part (another chain, contract or account) still clears it.
+ */
+export function usePoll<T>(
+  key: unknown[],
+  fn: () => Promise<T>,
+  enabled = true,
+  ms = 2_000,
+  keepWhileLastChanges = false,
+) {
+  return useQuery({
+    queryKey: key,
+    queryFn: fn,
+    enabled,
+    refetchInterval: ms,
+    placeholderData: keepWhileLastChanges
+      ? (previous, previousQuery) =>
+          previousQuery && sameScope(previousQuery.queryKey, key) ? previous : undefined
+      : undefined,
+  });
+}
+
+function sameScope(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }

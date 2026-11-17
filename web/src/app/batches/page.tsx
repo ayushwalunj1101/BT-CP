@@ -61,6 +61,7 @@ export default function BatchesPage() {
     },
     !!auction && !!now,
     3_000,
+    true,
   ).data;
 
   return (
