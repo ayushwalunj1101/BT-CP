@@ -1,6 +1,6 @@
 /**
  * The Sepolia demo's market maker, on a local chain: it stays quiet while nobody trades, and when a lone
- * trader commits it quotes in that same batch, so the trader is filled at its price, on both auctions.
+ * trader commits it quotes in that same batch, so the trader is filled at its price.
  */
 import { join } from "node:path";
 import { Wallet, hexlify, parseEther, parseUnits, randomBytes, toQuantity } from "ethers";
@@ -11,8 +11,6 @@ import {
   PRICE_SCALE,
   ROLE,
   type SealedOrder,
-  TICK,
-  type ZkOrder,
   anvilWallet,
   epochAt,
   mineUntilNext,
@@ -20,11 +18,9 @@ import {
   read,
   readClock,
 } from "@obscura/shared";
-import { sendOrderToSolver, shutdownProver } from "@obscura/solver";
 import { type LocalEnv, startLocalEnv } from "../src/env.ts";
 import { MarketMaker } from "../src/marketMaker.ts";
 import { commitSealed, filledFor, revealSealed } from "../src/traders.ts";
-import { commitZk } from "../src/zkTraders.ts";
 
 const PORT = 8621;
 const TEN = parseUnits("10", 18);
@@ -38,8 +34,6 @@ const newMarketMaker = () =>
     buyer,
     seller,
     deployment: env.deployment,
-    inboxUrl: env.zkInboxUrl,
-    solverPublicKey: env.zkSolver.inbox.publicKey,
     log: () => {},
   });
 
@@ -78,7 +72,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await env?.stop();
-  await shutdownProver();
 });
 
 describe("The market maker", () => {
@@ -129,47 +122,4 @@ describe("The market maker", () => {
     expect((await filledFor(env.auction, epoch, seller.address)).base).toBe(TEN);
     expect((await filledFor(env.auction, epoch, buyer.address)).base).toBe(0n); // its buy and sell never cross
   }, 120_000);
-
-  it("fills a lone buyer on the ZK auction, and stays quiet-but-quoting for the next batches", async () => {
-    const mm = newMarketMaker();
-    const clock = await readClock(env.zkAuction);
-    const epoch = await toCommitStart(clock);
-    const victim = anvilWallet(ROLE.victim, env.provider);
-    const order: ZkOrder = { isBuy: true, limitTicks: 10_100n, amountLots: 10_000n, salt: 0x5eed_1234n };
-    const bond = await read<bigint>(env.zkAuction, "revealBond");
-    await (await commitZk(env.deployment.zkAuction, victim, epoch, order, bond)).wait();
-    await sendOrderToSolver(env.zkInboxUrl, env.zkSolver.inbox.publicKey, {
-      epoch,
-      trader: victim.address,
-      order,
-    });
-
-    await mm.step(); // commits both quotes and sends them privately to the solver
-    expect(await read<unknown[]>(env.zkAuction, "getSlots", epoch)).toHaveLength(3);
-
-    await mineUntilNext(env.provider, phaseStart(clock, epoch, "Solve"));
-    const submission = await env.zkSolver.solve(epoch);
-    expect(submission).toMatchObject({ included: 3, volumeLots: 10_000n });
-    expect(submission!.priceTicks).toBe((await ask()) / TICK);
-    await mineUntilNext(env.provider, phaseStart(clock, epoch, "Settleable"));
-    await env.zkSolver.settle(epoch);
-
-    expect(await filledFor(env.zkAuction, epoch, victim.address)).toEqual({
-      base: TEN,
-      quote: (TEN * submission!.priceTicks * TICK) / PRICE_SCALE,
-    });
-    expect((await filledFor(env.zkAuction, epoch, seller.address)).base).toBe(TEN);
-
-    // The next batch (settle landed in its first block): it still quotes, alone. Nothing crosses, so no proof
-    // is made, and settle frees its funds.
-    const later = epoch + 1n;
-    await mm.step();
-    expect(await read<unknown[]>(env.zkAuction, "getSlots", later)).toHaveLength(2);
-    await mineUntilNext(env.provider, phaseStart(clock, later, "Solve"));
-    expect(await env.zkSolver.solve(later)).toBeNull();
-    await mineUntilNext(env.provider, phaseStart(clock, later, "Settleable"));
-    await env.zkSolver.settle(later);
-    expect(await read<bigint>(env.zkAuction, "lockedBalance", buyer.address, env.deployment.musd)).toBe(0n);
-    expect(await read<bigint>(env.zkAuction, "lockedBalance", seller.address, env.deployment.tkn)).toBe(0n);
-  }, 180_000);
 });

@@ -11,12 +11,12 @@ Testnet only. No real funds at any stage.
 
 | Stage | What | Status |
 |---|---|---|
-| 0 | Setup and spikes | Done |
+| 0 | Setup and tool checks | Done |
 | 1 | Prove the problem (AMM + sandwich bot) | Done |
 | 2 | Build the defence (batch auction + solver) | Done |
 | 3 | Bounty vault + invariant fuzzing | Done |
-| 4 | Zero-knowledge clearing | Done |
-| 5 | Web app + Sepolia | Done: website built, all 7 contracts live and verified on Sepolia |
+| 4 | Zero-knowledge clearing | Removed to keep the project simple; kept at git tag `full-version` |
+| 5 | Web app + Sepolia | Done: website built, contracts live and verified on Sepolia |
 
 ## Prerequisites
 
@@ -25,9 +25,8 @@ Testnet only. No real funds at any stage.
 | Node.js | 24.x (22+ works) | https://nodejs.org |
 | Git | 2.50 | https://git-scm.com |
 | Foundry (forge, anvil, cast) | 1.8.4 | In Git Bash: `curl -L https://foundry.paradigm.xyz \| bash`, then `foundryup` |
-| Circom | 2.2.3 | Download `circom-windows-amd64.exe` from https://github.com/iden3/circom/releases, save it as `circom.exe` in `%USERPROFILE%\.circom\bin` |
 
-Add `%USERPROFILE%\.foundry\bin` and `%USERPROFILE%\.circom\bin` to your PATH, then open a new terminal.
+Add `%USERPROFILE%\.foundry\bin` to your PATH, then open a new terminal.
 
 ## Setup
 
@@ -49,14 +48,11 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run format` | Formats TypeScript and JSON with Prettier. Use `forge fmt` inside `contracts/` for Solidity. |
 | `npm run web` | Starts the website on http://localhost:3000 (run `demo:up` first for the local chain). |
 | `npm run deploy:sepolia` | Deploys everything to Sepolia and verifies it on Etherscan. Add `-- --dry-run` to rehearse on a local chain first. |
-| `npm run sepolia:services` | Runs both solvers, the ZK inbox and a market maker against Sepolia, for the live demo. Add `-- --no-market-maker` to run the solvers only. |
+| `npm run sepolia:services` | Runs the solver and a market maker against Sepolia, for the live demo. Add `-- --no-market-maker` to run the solver only. |
 | `npm run demo:up` | Starts a local chain (a block every 2 s), deploys both venues, and runs the sandwich bot, the solver and six simulated traders. Leave it running. |
 | `npm run demo:attack` | Act I: a victim trade on SimpleAMM. Needs `demo:up` running in another terminal. Options: `-- --side sell --amount 500 --slippage 50` |
 | `npm run demo:defence` | Act II: the same trade as a sealed order through Obscura. Same options as `demo:attack`. |
-| `npm run demo:zk` | Act II, zero-knowledge edition: the same trade sealed with Poseidon, sent to the solver privately, settled from a proof. Never revealed. |
 | `npm run demo:bounty` | Act III: four planted bugs, one per rule, each making the bounty vault pay out automatically; the real contract never does. |
-| `npm run zk:setup` | Compiles the clearing circuit and runs the trusted setup (downloads the public Powers of Tau file once). Only needed if the circuit changes; it produces a new proving key and verifier. |
-| `npm run zk:fixture` | Proves a 16-order batch for the Foundry tests. Run after every `zk:setup`. |
 | `npm run fuzz` | The long invariant campaign (1,000 runs × 300 random calls, about 10 minutes). Writes `results/fuzz-report.md`. |
 | `npm run harness` | Measures extraction over 100 random trades on both venues, with and without the bot, and writes CSVs to `results/`. Options: `-- --venue both --trades 100 --seed 1 --slippage 100 --min-size 50 --max-size 500` |
 | `npm run bot` | Runs only the bot, against a chain that is already running. |
@@ -65,8 +61,6 @@ npm test                 # TypeScript tests (starts its own Anvil chain)
 | `npm run deploy:local` | Runs only the deploy script, against a chain on port 8545. |
 | `npm run abis` | Rebuilds the contracts and regenerates the TypeScript ABIs in `packages/shared/src/abis/`. Run after changing a contract's interface. |
 | `npm run chain` | Starts a bare Anvil chain with 4-second blocks. |
-| `npm run spike:ordering` | Re-runs Spike A. |
-| `npm run spike:zk` | Re-runs Spike B: compiles the circuit, runs a local setup, proves, and regenerates the Solidity verifier and proof fixture. |
 
 ## Running the demo
 
@@ -76,8 +70,6 @@ Two terminals, both in this folder:
 2. Act I: `npm run demo:attack` makes an ordinary trade on SimpleAMM and prints the block: bot, victim, bot.
 3. Act II: `npm run demo:defence` makes the same trade as a sealed Obscura order and follows it through one
    batch (about 22 s): what the bot sees, the clearing price, every fill at that price, and the bot's zero.
-   `npm run demo:zk` does the same on the zero-knowledge auction: the order is never revealed at all, and the
-   batch settles from a proof (commit, proof, settle; no reveal transaction).
 4. Act III: `npm run demo:bounty` (needs no chain) runs the four planted bugs against the bounty vault.
    `demo:up` also deploys the real vault with 10,000 mUSD and prints its address.
 
@@ -93,8 +85,6 @@ leftover chain (PowerShell: `Stop-Process -Name anvil`).
 contracts/
   src/ObscuraBase.sol       Deposit ledger, epoch clock, ETH bonds, settlement maths (no admin)
   src/ObscuraAuction.sol    Commit, reveal, submitSolution, settle, and the checks for I2 to I4
-  src/ObscuraAuctionZK.sol  The zero-knowledge auction: Poseidon commits, proof-checked solutions, settle
-  src/zk/                   ClearingVerifier.sol, generated by snarkjs (do not edit)
   src/InvariantBounty.sol   The vault that pays whoever proves I1 to I4 broken (commit-reveal claims)
   src/interfaces/           IObscuraInvariants: checkI1 to checkI4
   src/libraries/Clearing.sol  The rules a batch solution must obey, checked in one pass
@@ -104,34 +94,24 @@ contracts/
   test/unit/        Unit and fuzz tests per contract
   test/bounty/      The vault's tests, including the four planted bugs
   test/invariant/   The fuzzing handler, a Solidity reference solver, and the invariant suite
-  test/zk/          ObscuraAuctionZK settled from a real proof (fixture: test/fixtures/zk-batch.json)
   test/vectors/     Commitment-hash vectors shared with the TypeScript tests
-  test/spikes/      Spike B on-chain test and its generated verifier
-  test/fixtures/    Proofs exported by the circuit scripts
 packages/
   shared/           ABIs, deployments, Anvil accounts, chain and batch-clock helpers, AMM maths, order hashing
   bot/              The sandwich bot: sandwich.ts (pure maths) and bot.ts (live mempool watcher)
-  solver/           clearing.ts (the clearing algorithm), solver.ts (v1), zk.ts and zkSolver.ts (prove and
-                    submit ZK batches), inbox.ts (the encrypted private order channel)
-  harness/          demo:up, demo:attack, demo:defence, simulated traders, and the measurement harness
+  solver/           clearing.ts (the clearing algorithm), solver.ts (submits solutions and settles batches)
+  harness/          demo:up, demo:attack, demo:defence, simulated traders, the Sepolia market maker, and the
+                    measurement harness
 web/                The website (Next.js 16, wagmi 3, viem): src/app (pages), src/components, src/lib
 scripts/            fuzz.mjs (long invariant campaign), deploy-sepolia.mjs
-circuits/clearing/  The clearing circuit, its tests, the setup script and the fixture script
-circuits/keys/      Proving key, witness generator and verification key (must match ClearingVerifier.sol)
-circuits/spikes/    Spike B circuit and pipeline script
-spikes/             Spike A test
 deployments/        Contract addresses per chain (local files are git-ignored)
 results/            Harness output (CSV per run)
 ```
 
-Anvil accounts: 0 deployer, 1 victim, 2 bot, 3 solver, 4 to 9 simulated traders on the v1 auction,
-10 ZK solver, 11 to 16 simulated traders on the ZK auction (10 to 16 get ETH from the deploy script).
+Anvil accounts: 0 deployer, 1 victim, 2 bot, 3 solver, 4 to 9 simulated traders.
 
-## Spike results (Stage 0)
+## Notes on the local chain (Stage 0)
 
-### Spike A: can the bot control transaction order on Anvil? Yes, with one rule.
-
-`spikes/ordering.test.ts`, 4 tests, stable over repeated runs.
+Before building, we checked that a bot can control transaction order on Anvil. It can, with one rule.
 
 - A WebSocket subscriber sees a transaction while it is still pending, so the bot can react before it is mined.
 - **Anvil ranks pending transactions by max fee per gas, not by priority fee (tip).** When max fees are
@@ -140,18 +120,6 @@ Anvil accounts: 0 deployer, 1 victim, 2 bot, 3 solver, 4 to 9 simulated traders 
   it. That ordering holds with manual mining (the measurement harness) and with interval mining (the live demo).
 - ethers caches identical RPC calls for 250 ms by default, which returns stale nonces. Every provider in
   this project sets `cacheTimeout: -1`.
-
-### Spike B: does the ZK toolchain work end to end on our machines? Yes.
-
-`circuits/spikes/` and `contracts/test/spikes/`, 4 Foundry tests.
-
-- A circuit proving "I know an order and salt whose Poseidon hash is this commitment" compiles to
-  517 constraints and proves in a few seconds.
-- The snarkjs-generated Solidity verifier accepts the proof for **about 214,000 gas** with one public input,
-  and rejects a changed commitment or a tampered proof.
-- An invalid proof makes the verifier burn all the gas it is given. In Stage 4, a solver's proof must only
-  ever be checked inside the solver's own transaction, so nobody else can be made to pay for a bad one.
-- The spike uses a one-person local setup ceremony. Stage 4 uses a public Powers of Tau file.
 
 ## Stage 1 results: the attack, measured
 
@@ -286,65 +254,15 @@ Lesson from building it: the first version of the fuzzer "passed" while reaching
 (zero solutions in 65 runs), because random time jumps skipped the 2-block reveal window. A passing fuzzer
 proves nothing until you check how deep it got. The campaign now records that for every run.
 
-## Stage 4 results: orders that are never revealed
+## Stage 4: zero-knowledge clearing (removed)
 
-### How it works
+Stage 4 added a second exchange where orders are never revealed: each batch settled from a zero-knowledge
+proof (Circom circuit, Groth16, Poseidon commitments, orders sent to the solver encrypted with ECIES). It
+worked, but it added most of the project's hardest concepts and about 30% of its code, and the commit-reveal
+auction already stops the sandwich bot on its own. It was removed to keep the project focused.
 
-1. **Commit.** The trader posts `Poseidon(trader, epoch, side, limit, amount, salt)` and a bond. Their whole
-   free balance locks for the batch, so the lock says nothing about the order's size.
-2. **Send privately.** The order itself goes to the solver over HTTP, encrypted to the solver's public key
-   (ECIES on secp256k1). It never touches the chain or the mempool.
-3. **Prove.** The solver clears the batch and proves, with Groth16, that the price and fills are a valid
-   clearing of exactly the committed orders. The contract checks the proof in the solver's own transaction.
-4. **Settle.** Everyone in the batch trades at the one proven price.
-
-The circuit (`circuits/clearing/clearing.circom`, 16 orders, about 28,000 constraints, 98 public inputs)
-enforces the same rules as the v1 contract: each included order opens its slot's commitment for this trader
-and this batch; it counts only if the locked funds cover it at its limit; fills never exceed orders; buyers
-never pay above their limit and sellers never receive below theirs; every order that crosses the price
-strictly fills completely; and TKN bought equals TKN sold. Amounts are in lots of 0.001 TKN and prices in
-ticks of 0.01 mUSD, so every payment is an exact integer and there is no rounding at all.
-
-| Published on-chain | Never published |
-|---|---|
-| Each order's Poseidon commitment | Side, limit price and size of every order |
-| The clearing price, after the batch closes | Anything about an unfilled order, including its side |
-| Each fill (size and side), after the batch closes | |
-
-Trusted setup: phase 1 is the public Perpetual Powers of Tau (PSE, 80 contributions), checked against a pinned
-SHA-256; phase 2 is our own contribution with fresh random entropy that was never stored. The proof system is
-sound as long as at least one contributor discarded their secret.
-
-### Results
-
-| | |
-|---|---|
-| Proving time, 16-order batch | about 1.1 to 1.4 s on a laptop |
-| `submitProof` gas (Groth16 check with 98 public inputs, plus storing the result) | about 1.42 M |
-| `settle` gas, 16 slots | about 2.44 M |
-| Transactions for one batch on a live chain | 16 commits, 1 proof, 1 settle, 0 reveals |
-| Circuit tests | 14: a valid batch proves and verifies; a wrong order, a copied commitment, a censored crossing order, a buyer filled above their limit, unequal sides, an overfill, an unfunded order forced to trade, and an invented order in an empty slot all fail |
-| Contract tests | 12, against a real proof: a changed fill, price, inclusion flag or commitment, or the proof replayed in another batch, is rejected |
-
-### Design decisions
-
-- **No solver bond on the ZK path.** An invalid proof cannot be accepted at all, so there is nothing to slash.
-  A better proof (more volume) replaces a worse one during the solve window.
-- **The trader's bond** comes back if the solver included the order, and is forfeited if it was left out,
-  which is what happens to a trader who never sends their order (the free-option attack, A1).
-- **I3 (limit respect) is enforced inside the circuit**, because limit prices never appear on-chain; the
-  ZK contract's `checkI3` cannot see them. I1, I2 and I4 are checked on-chain as on v1.
-
-### Honest limits
-
-- **The solver sees the orders it proves.** Zero knowledge hides orders from everyone else, the bot included,
-  and guarantees the solver's answer is correct. It does not stop the solver itself from knowing the orders.
-  Hiding them from the solver too would need multi-party computation or trusted hardware (future work).
-- **A solver can leave an order out.** The circuit stops it from filling an order wrongly, but not from
-  saying "I never received it". Competing solvers limit this (the most volume wins), and the plan's F13,
-  solver-signed receipts that let a censored trader slash the solver, is not built. A censored trader also
-  loses their bond today.
-- **One order per trader per batch, 16 orders per batch, and the whole balance locks while the batch runs.**
+The full version, with its circuit, contracts, tests and website page, is kept at the git tag `full-version`
+(`git switch --detach full-version` to look at it, `git switch -` to come back).
 
 ## Stage 5: the website and Sepolia
 
@@ -353,8 +271,7 @@ sound as long as at least one contributor discarded their secret.
 | Page | What it does |
 |---|---|
 | Trade | Deposit, seal an order (the hash is computed in your browser), commit it with the bond, and it is revealed automatically in the reveal window while the tab is open. Your secret salt is kept in a reveal ticket you can download and restore. Shows your fill at the batch price. |
-| Private (ZK) | Seal with Poseidon, commit, and send the order itself to the solver, encrypted from the browser. Never revealed; shows your fill after the proof settles the batch. |
-| Batches | Recent batches on both auctions: clearing price, matched volume, solver, and every fill at that one price. |
+| Batches | Recent batches: clearing price, matched volume, solver, and every fill at that one price. |
 | Bounty | The vault's balance, the four rules checked live, and the two-step claim. |
 | Normal exchange | Act I in the browser: swap on SimpleAMM while the bot runs and see BOT, YOU, BOT in your block. |
 
@@ -364,8 +281,7 @@ The local test account is only offered while the local chain is running. Without
 wallet on any other network gets a **Switch to Sepolia** button.
 
 Tested in a real browser (Playwright) against the live local chain: connect, get test tokens, deposit; a sealed
-order revealed automatically and filled at the batch price (99.75, limit 101); a private ZK order proved and
-filled (99.56) with the balance unlocked to the wei; the batch explorer; a bounty claim refused with a plain
+order revealed automatically and filled at the batch price (99.75, limit 101); the batch explorer; a bounty claim refused with a plain
 message; a swap on the normal exchange sandwiched by the bot (100.00 bps); and the layout at phone width.
 Bugs found and fixed while testing: the test wallet disconnected on reload, and contract errors showed as raw
 bytes instead of names (calls are now simulated first, so errors are decoded before anything is sent).
@@ -375,6 +291,8 @@ bytes instead of names (calls are now simulated first, so errors are decoded bef
 Deployed on 2026-10-05 from `0xcaa820b6b11a5855272784911a3823fc2ff8F79F` (a project-only test account) in 18
 transactions, costing 0.0124 Sepolia ETH at about 1.1 gwei. All seven contracts are verified on Etherscan and
 Sourcify. Addresses are in `deployments/11155111.json`; the transaction record is in `contracts/broadcast/`.
+That deployment was made before the zero-knowledge edition was removed, so it also contains that edition's two
+contracts (ClearingVerifier and ObscuraAuctionZK). They stay on Sepolia, but nothing in this version uses them.
 
 | Contract | Address |
 |---|---|
@@ -400,13 +318,11 @@ local chain running, reads the Sepolia vault (10,000.00 mUSD).
    MetaMask account) and `ETHERSCAN_API_KEY`. Never commit `.env`, never paste it anywhere.
 5. `npm run deploy:sepolia -- --dry-run` (rehearsal), then `npm run deploy:sepolia`. Commit the new
    `deployments/11155111.json`.
-6. `npm run sepolia:services` to run the solvers, and `npm run web`. In MetaMask switch to Sepolia; visitors
+6. `npm run sepolia:services` to run the solver, and `npm run web`. In MetaMask switch to Sepolia; visitors
    press **Get test tokens** on the site, since anyone can mint the test tokens.
 
-On Sepolia a batch takes about 2 minutes (11 blocks of 12 s). The ZK inbox runs on the laptop that runs
-`sepolia:services`, so private (ZK) orders can be placed from that machine's browser; the commit-reveal auction,
-explorer and bounty board work from anywhere. Trade from a MetaMask account other than the deployer: the
-deployer is also the v1 solver, and its transactions would compete with yours.
+On Sepolia a batch takes about 2 minutes (11 blocks of 12 s). Trade from a MetaMask account other than the
+deployer: the deployer is also the solver, and its transactions would compete with yours.
 
 ### Trading alone: the market maker
 
@@ -419,22 +335,20 @@ A batch needs a buyer and a seller. Locally the six simulated traders provide th
 - Its buy and sell never cross each other, so it only trades with other people, at the auction's price. A buy
   with a limit of 100.50 or more, or a sell at 99.50 or less, is filled.
 - It uses two accounts derived from the deployer's key (one buys, one sells), topped up with 0.01 ETH each
-  when low. On the ZK auction it sends its orders privately to the solver like any trader.
+  when low.
 - It needs your order early enough in the commit window to answer in the same batch: commit while at least
   two blocks (about 25 s) remain. A later order is not lost; it is refunded unfilled, and the market maker is
   already quoting in the next two batches.
 
-When nothing crosses in a batch, neither solver submits anything: no zero-volume solution on the commit-reveal
-auction (it would lock a 0.01 ETH bond and cost gas), and no proof of zero fills on the ZK auction (about
-1.4 M gas). The batch settles as voided and every order's funds and bond are released.
+When nothing crosses in a batch, the solver submits nothing (a zero-volume solution would lock a 0.01 ETH bond
+and cost gas). The batch settles as voided and every order's funds and bond are released.
 
 The first live order on Sepolia (batch 23) was committed before depositing, so it could not be revealed (a
 reveal locks the order's funds from the Obscura balance) and its 0.0005 ETH bond was forfeited. The order
 forms now check the free balance and refuse to seal an order it cannot cover, saying how much to deposit.
 
 Tested on a local chain (`packages/harness/test/marketMaker.test.ts`): it sends nothing while nobody else
-trades; a lone buy of 10 TKN at limit 101 is filled at the market maker's ask (100.50) on both auctions; and in
-the following ZK batch it quotes alone, no proof is made, and its funds are released.
+trades; and a lone buy of 10 TKN at limit 101 is filled at the market maker's ask (100.50).
 
 ## Conventions
 

@@ -11,7 +11,6 @@ export type Deployment = {
   amm: Address;
   auction: Address;
   bounty: Address;
-  zkAuction: Address;
 };
 
 /** Contract addresses for the connected chain, from deployments/<chainId>.json (null if not deployed). */

@@ -6,14 +6,11 @@ import {MockERC20} from "../src/tokens/MockERC20.sol";
 import {SimpleAMM} from "../src/amm/SimpleAMM.sol";
 import {ObscuraBase} from "../src/ObscuraBase.sol";
 import {ObscuraAuction} from "../src/ObscuraAuction.sol";
-import {ObscuraAuctionZK} from "../src/ObscuraAuctionZK.sol";
 import {InvariantBounty} from "../src/InvariantBounty.sol";
-import {ClearingVerifier} from "../src/zk/ClearingVerifier.sol";
-import {IClearingVerifier} from "../src/interfaces/IClearingVerifier.sol";
 
 /// @title DeploySepolia
 /// @notice Deploys every contract to Sepolia (or any public testnet) with the deployer's key from the environment,
-///         seeds the AMM pool, both fee pools and the bounty vault with freshly minted test tokens, and writes the
+///         seeds the AMM pool, the fee pool and the bounty vault with freshly minted test tokens, and writes the
 ///         addresses to deployments/<chainId>.json. Visitors get their own test tokens from the website's
 ///         "Get test tokens" button, because anyone can mint them.
 /// @dev Run through `npm run deploy:sepolia`, which loads .env and adds Etherscan verification. Never commit the key.
@@ -31,8 +28,6 @@ contract DeploySepolia is Script {
         SimpleAMM amm;
         ObscuraAuction auction;
         InvariantBounty bounty;
-        ClearingVerifier verifier;
-        ObscuraAuctionZK zkAuction;
     }
 
     function run() external {
@@ -46,12 +41,8 @@ contract DeploySepolia is Script {
         d.tkn = new MockERC20("Obscura Test Token", "TKN");
         d.musd = new MockERC20("Mock USD", "mUSD");
         d.amm = new SimpleAMM(d.tkn, d.musd);
-        d.auction = new ObscuraAuction(d.tkn, d.musd, _testnetConfig(64, 4));
+        d.auction = new ObscuraAuction(d.tkn, d.musd, _testnetConfig());
         d.bounty = new InvariantBounty(d.auction, d.musd, CLAIM_DELAY);
-        d.verifier = new ClearingVerifier();
-        d.zkAuction = new ObscuraAuctionZK(
-            d.tkn, d.musd, _testnetConfig(16, 1), IClearingVerifier(address(d.verifier))
-        );
         _seed(d, vm.addr(deployerKey));
         vm.stopBroadcast();
 
@@ -61,15 +52,13 @@ contract DeploySepolia is Script {
         vm.serializeAddress(obj, "musd", address(d.musd));
         vm.serializeAddress(obj, "amm", address(d.amm));
         vm.serializeAddress(obj, "auction", address(d.auction));
-        vm.serializeAddress(obj, "bounty", address(d.bounty));
-        vm.serializeAddress(obj, "verifier", address(d.verifier));
-        string memory json = vm.serializeAddress(obj, "zkAuction", address(d.zkAuction));
+        string memory json = vm.serializeAddress(obj, "bounty", address(d.bounty));
         vm.writeJson(json, outFile);
     }
 
     function _seed(Deployed memory d, address deployer) internal {
         d.tkn.mint(deployer, POOL_TKN);
-        d.musd.mint(deployer, POOL_MUSD + 2 * FEE_POOL_MUSD + BOUNTY_MUSD);
+        d.musd.mint(deployer, POOL_MUSD + FEE_POOL_MUSD + BOUNTY_MUSD);
         d.tkn.approve(address(d.amm), POOL_TKN);
         d.musd.approve(address(d.amm), POOL_MUSD);
         d.amm.addLiquidity(POOL_TKN, POOL_MUSD);
@@ -77,17 +66,11 @@ contract DeploySepolia is Script {
         d.bounty.fund(BOUNTY_MUSD);
         d.musd.approve(address(d.auction), FEE_POOL_MUSD);
         d.auction.fundFeePool(FEE_POOL_MUSD);
-        d.musd.approve(address(d.zkAuction), FEE_POOL_MUSD);
-        d.zkAuction.fundFeePool(FEE_POOL_MUSD);
     }
 
     /// @dev Same windows as locally (commit 5 blocks, reveal 3, solve 3), about 2 minutes per batch at 12 s blocks.
     ///      Bonds sized for faucet ETH.
-    function _testnetConfig(uint256 maxOrders, uint256 maxSolutions)
-        internal
-        pure
-        returns (ObscuraBase.Config memory)
-    {
+    function _testnetConfig() internal pure returns (ObscuraBase.Config memory) {
         return ObscuraBase.Config({
             commitBlocks: 5,
             revealBlocks: 3,
@@ -95,8 +78,8 @@ contract DeploySepolia is Script {
             revealBond: 0.0005 ether,
             solverBond: 0.01 ether,
             solverReward: 10e18,
-            maxOrders: maxOrders,
-            maxSolutions: maxSolutions
+            maxOrders: 64,
+            maxSolutions: 4
         });
     }
 }

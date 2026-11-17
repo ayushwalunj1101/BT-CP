@@ -5,8 +5,6 @@ import { injected, mock } from "wagmi/connectors";
 export const LOCAL_RPC_URL = process.env.NEXT_PUBLIC_LOCAL_RPC_URL ?? "http://127.0.0.1:8545";
 export const SEPOLIA_RPC_URL =
   process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-/** The ZK solver's private order inbox. Local by default; the solver runs next to the chain. */
-export const ZK_INBOX_URL = process.env.NEXT_PUBLIC_ZK_INBOX_URL ?? "http://127.0.0.1:8650";
 /** Offer Anvil's account #0 as a one-click test wallet (local chain only). Set to "0" to hide it. */
 export const LOCAL_ACCOUNTS_ENABLED = process.env.NEXT_PUBLIC_LOCAL_ACCOUNTS !== "0";
 /** Anvil's public development account #0. Anvil signs for it, so no key is ever handled here. */

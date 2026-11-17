@@ -16,7 +16,7 @@ export function foundryBinary(tool: "anvil" | "forge" | "cast"): string {
 
 /**
  * HTTP provider with caching switched off. ethers otherwise reuses identical calls for 250 ms,
- * which returns stale nonces and balances (found in Spike A).
+ * which returns stale nonces and balances.
  */
 export function httpProvider(url: string, chainId = ANVIL_CHAIN_ID): JsonRpcProvider {
   return new JsonRpcProvider(url, Network.from(chainId), { staticNetwork: true, cacheTimeout: -1 });

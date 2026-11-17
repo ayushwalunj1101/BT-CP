@@ -12,7 +12,7 @@ import { read, send } from "@/lib/tx";
 import { config } from "@/lib/wagmi";
 
 const erc20 = MockERC20Abi as Abi;
-const ledger = ObscuraAuctionAbi as Abi; // both auctions share the deposit ledger (ObscuraBase)
+const ledger = ObscuraAuctionAbi as Abi; // the deposit ledger (ObscuraBase)
 
 type Balances = {
   eth: bigint;

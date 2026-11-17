@@ -22,34 +22,22 @@
     "demo:up": "tsx packages/harness/src/up.ts",
     "demo:attack": "tsx packages/harness/src/attack.ts",
     "demo:defence": "tsx packages/harness/src/defence.ts",
-    "demo:zk": "tsx packages/harness/src/zkDefence.ts",
     "bot": "tsx packages/bot/src/cli.ts",
     "solver": "tsx packages/solver/src/cli.ts",
     "vectors": "tsx packages/shared/scripts/gen-vectors.ts",
     "fuzz": "node scripts/fuzz.mjs",
     "demo:bounty": "forge test --root contracts --match-contract InvariantBountyTest -vv",
     "harness": "tsx packages/harness/src/measure.ts",
-    "spike:ordering": "vitest run spikes/ordering",
-    "spike:zk": "node circuits/spikes/spike-b.mjs",
-    "zk:setup": "node circuits/clearing/setup.mjs",
-    "zk:fixture": "tsx circuits/clearing/fixture.ts",
     "web": "npm run dev --workspace @obscura/web",
     "deploy:sepolia": "node scripts/deploy-sepolia.mjs",
     "sepolia:services": "tsx packages/harness/src/sepolia.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "circomlib": "^2.0.5",
-    "eciesjs": "^0.5.0",
     "ethers": "^6.17.0",
-    "poseidon-lite": "^0.3.0",
     "prettier": "^3.9.9",
-    "snarkjs": "^0.7.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
-  },
-  "overrides": {
-    "underscore": "^1.13.8"
   }
 }

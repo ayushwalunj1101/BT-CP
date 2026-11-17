@@ -18,7 +18,7 @@ const REVEAL_GAS = 300_000n;
 
 type Fill = { trader: Address; isBuy: boolean; baseAmount: bigint; quoteAmount: bigint };
 
-export function TradeV1() {
+export function Trade() {
   const { address } = useConnection();
   const { chainId, deployment } = useDeployment();
   const auction = deployment?.auction;
@@ -143,7 +143,6 @@ function SealOrder({
       });
       const [event] = parseEventLogs({ abi: ObscuraAuctionAbi, eventName: "Committed", logs: receipt.logs });
       onSealed({
-        kind: "v1",
         epoch: epoch.toString(),
         index: (event?.args.index ?? 0n).toString(),
         isBuy,

@@ -1,19 +1,7 @@
-import {
-  InvariantBountyAbi,
-  MockERC20Abi,
-  ObscuraAuctionAbi,
-  ObscuraAuctionZKAbi,
-  SimpleAMMAbi,
-} from "@obscura/shared/abis";
+import { InvariantBountyAbi, MockERC20Abi, ObscuraAuctionAbi, SimpleAMMAbi } from "@obscura/shared/abis";
 import { type Abi, type Hex, decodeErrorResult, formatUnits, parseUnits, toFunctionSelector } from "viem";
 
-const ABIS = [
-  ObscuraAuctionAbi,
-  ObscuraAuctionZKAbi,
-  InvariantBountyAbi,
-  SimpleAMMAbi,
-  MockERC20Abi,
-] as Abi[];
+const ABIS = [ObscuraAuctionAbi, InvariantBountyAbi, SimpleAMMAbi, MockERC20Abi] as Abi[];
 
 /** Contract errors a person can hit by timing alone, in plain words. */
 const PLAIN: Record<string, string> = {

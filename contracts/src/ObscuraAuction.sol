@@ -7,7 +7,7 @@ import {IObscuraInvariants} from "./interfaces/IObscuraInvariants.sol";
 import {Clearing, Fill, Order} from "./libraries/Clearing.sol";
 
 /// @title ObscuraAuction
-/// @notice The v1 dark pool: sealed orders, revealed only after the commit window closes, then filled
+/// @notice The Obscura dark pool: sealed orders, revealed only after the commit window closes, then filled
 ///         together at one uniform price that an outside solver computes and this contract checks.
 ///
 ///         1. Commit  a hash of the order and a small ETH bond. The mempool sees 32 unreadable bytes.

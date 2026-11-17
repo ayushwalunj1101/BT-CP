@@ -2,7 +2,7 @@
 
 import { EpochBar } from "@/components/EpochBar";
 import { FundsPanel } from "@/components/FundsPanel";
-import { TradeV1 } from "@/components/TradeV1";
+import { Trade } from "@/components/Trade";
 import { useDeployment } from "@/lib/deployment";
 
 export default function TradePage() {
@@ -21,7 +21,7 @@ export default function TradePage() {
         <FundsPanel auction={deployment?.auction} title="Your funds" />
         <div className="stack">
           <EpochBar auction={deployment?.auction} />
-          <TradeV1 />
+          <Trade />
         </div>
       </div>
     </>

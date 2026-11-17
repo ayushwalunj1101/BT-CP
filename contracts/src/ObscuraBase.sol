@@ -7,9 +7,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Clearing, Order} from "./libraries/Clearing.sol";
 
 /// @title ObscuraBase
-/// @notice Shared core of the Obscura auctions: the deposit ledger, the epoch clock, ETH bonds, and the
-///         maths that moves funds when a batch settles at one price. The v1 commit-reveal auction and the
-///         Stage 4 zero-knowledge auction both build on it.
+/// @notice Core of the Obscura auction: the deposit ledger, the epoch clock, ETH bonds, and the maths that
+///         moves funds when a batch settles at one price. ObscuraAuction builds the commit-reveal steps on it.
 /// @dev There is no owner and no admin function. Forfeited and slashed ETH stays in the treasury for good.
 ///      ETH owed to people is credited and then withdrawn by them ("pull"), so nobody can block a settlement
 ///      by refusing a payment.

@@ -3,22 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Your sealed orders, kept in this browser. A v1 ticket holds the salt needed to reveal; losing it means
+ * Your sealed orders, kept in this browser. A ticket holds the salt needed to reveal; losing it means
  * the order cannot be revealed and its bond is forfeited, so the page also lets you download it.
  */
 export type Ticket = {
-  kind: "v1" | "zk";
   epoch: string;
   index: string;
   isBuy: boolean;
-  /** v1: limit price and amount in 18-decimal units. ZK: limit in ticks, amount in lots. */
+  /** Limit price and amount, in 18-decimal units. */
   limit: string;
   amount: string;
   salt: string;
   commitment: string;
   txHash: string;
-  /** ZK only: whether the order reached the solver's inbox. */
-  sent?: boolean;
 };
 
 function storageKey(scope: string) {
@@ -73,7 +70,7 @@ export function downloadTicket(t: Ticket, extra: Record<string, string>) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `obscura-${t.kind}-batch-${t.epoch}-${t.index}.json`;
+  a.download = `obscura-batch-${t.epoch}-${t.index}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }

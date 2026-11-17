@@ -1,7 +1,2 @@
 # Keep LF line endings on every OS, so forge fmt and Prettier checks agree on Windows, macOS and Linux.
 * text=auto eol=lf
-
-# Zero-knowledge artifacts are binary: never convert them.
-*.zkey binary
-*.wasm binary
-*.ptau binary

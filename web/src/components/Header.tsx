@@ -6,7 +6,6 @@ import { WalletButton } from "./WalletButton";
 
 const LINKS = [
   { href: "/", label: "Trade" },
-  { href: "/private", label: "Private (ZK)" },
   { href: "/batches", label: "Batches" },
   { href: "/bounty", label: "Bounty" },
   { href: "/exchange", label: "Normal exchange" },

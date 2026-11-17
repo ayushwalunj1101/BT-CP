@@ -4,7 +4,7 @@
  * It subscribes to pending transactions, picks out swaps on SimpleAMM, and for each one sends a
  * front-run that lands before the victim and a back-run that lands after it, in the same block.
  *
- * Ordering rule (Spike A): Anvil ranks pending transactions by max fee per gas, real Ethereum
+ * Ordering rule: Anvil ranks pending transactions by max fee per gas, real Ethereum
  * builders by priority fee. The bot moves both: higher than the victim's to go first, lower to go last.
  *
  * It also watches Obscura, logs what it sees there, and finds nothing to act on.
@@ -21,7 +21,6 @@ import {
 import {
   MockERC20Abi,
   ObscuraAuctionAbi,
-  ObscuraAuctionZKAbi,
   SimpleAMMAbi,
   fmtAmount,
   fmtGwei,
@@ -52,8 +51,6 @@ export type BotConfig = {
   amm: string;
   /** ObscuraAuction address, if deployed. The bot watches it too, and finds nothing it can use. */
   auction?: string;
-  /** ObscuraAuctionZK address, if deployed. Its orders are never readable at all. */
-  zkAuction?: string;
   /** Token symbols by address, for log lines. */
   symbols: Record<string, string>;
   /** Ignore sandwiches that would earn this much or less, in the victim's input token. Default: DUST_PROFIT. */
@@ -70,7 +67,6 @@ const SWAP_GAS_LIMIT = 200_000n;
 export class SandwichBot {
   private readonly ammInterface = new Interface(SimpleAMMAbi);
   private readonly auctionInterface = new Interface(ObscuraAuctionAbi);
-  private readonly zkAuctionInterface = new Interface(ObscuraAuctionZKAbi);
   private readonly amm: Contract;
   private readonly log: (line: string) => void;
   private ws?: WebSocketProvider;
@@ -182,23 +178,6 @@ export class SandwichBot {
     }
   }
 
-  /** On the ZK auction the bot sees a hash at commit time and a proof after the batch closed. Nothing else. */
-  private inspectObscuraZk(hash: string, data: string): void {
-    const call = this.zkAuctionInterface.parseTransaction({ data });
-    if (call?.name === "commit") {
-      this.log(
-        `pending ${shortHash(hash)}  Obscura ZK commit(${shortHash("0x" + (call.args[1] as bigint).toString(16))})` +
-          `  sealed, and never revealed: nothing to front-run.`,
-      );
-      this.decide({ victim: hash, action: "skip", reason: "sealed order, zero knowledge" });
-    } else if (call?.name === "submitProof") {
-      this.log(
-        `pending ${shortHash(hash)}  Obscura ZK proof: one price and the fills, no orders. Nothing to act on.`,
-      );
-      this.decide({ victim: hash, action: "skip", reason: "proof only" });
-    }
-  }
-
   private async handle(hash: string): Promise<void> {
     if (this.paused || this.decisions.has(hash)) return; // act on each transaction at most once
     const { provider, wallet } = this.config;
@@ -207,10 +186,6 @@ export class SandwichBot {
     if (!tx?.to) return;
     if (this.config.auction && tx.to.toLowerCase() === this.config.auction.toLowerCase()) {
       this.inspectObscura(hash, tx.data);
-      return;
-    }
-    if (this.config.zkAuction && tx.to.toLowerCase() === this.config.zkAuction.toLowerCase()) {
-      this.inspectObscuraZk(hash, tx.data);
       return;
     }
     if (tx.to.toLowerCase() !== this.config.amm.toLowerCase()) return;

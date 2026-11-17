@@ -19,7 +19,6 @@ const bot = new SandwichBot({
   wallet: anvilWallet(ROLE.bot, provider),
   amm: deployment.amm,
   auction: deployment.auction,
-  zkAuction: deployment.zkAuction,
   symbols: { [deployment.tkn.toLowerCase()]: "TKN", [deployment.musd.toLowerCase()]: "mUSD" },
 });
 

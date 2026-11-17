@@ -6,22 +6,16 @@ import { epochStart, length } from "@/lib/clock";
 import { useBatchNow } from "@/lib/hooks";
 import { blockSeconds } from "@/lib/wagmi";
 
-const WHAT: Record<string, { v1: string; zk: string }> = {
-  Commit: { v1: "Commit window: seal orders now", zk: "Commit window: seal orders now" },
-  Reveal: {
-    v1: "Reveal window: open your sealed orders",
-    zk: "Hand-off window: orders travel to the solver privately",
-  },
-  Solve: {
-    v1: "Solve window: solvers compute the price",
-    zk: "Solve window: the solver proves the clearing",
-  },
-  Settleable: { v1: "Settling", zk: "Settling" },
-  NotStarted: { v1: "Not started", zk: "Not started" },
+const WHAT: Record<string, string> = {
+  Commit: "Commit window: seal orders now",
+  Reveal: "Reveal window: open your sealed orders",
+  Solve: "Solve window: solvers compute the price",
+  Settleable: "Settling",
+  NotStarted: "Not started",
 };
 
 /** Where the current batch is: which window, and how long until it closes. */
-export function EpochBar({ auction, zk = false }: { auction: Address | undefined; zk?: boolean }) {
+export function EpochBar({ auction }: { auction: Address | undefined }) {
   const now = useBatchNow(auction);
   const chainId = useChainId();
   if (!now) return <div className="card muted">Reading the batch clock…</div>;
@@ -37,7 +31,7 @@ export function EpochBar({ auction, zk = false }: { auction: Address | undefined
       <div className="clock-head">
         <h2>Batch {epoch.toString()}</h2>
         <span className="mono small">
-          {WHAT[phase]![zk ? "zk" : "v1"]} · closes in {blocksLeft.toString()} block
+          {WHAT[phase]} · closes in {blocksLeft.toString()} block
           {blocksLeft === 1n ? "" : "s"} (~
           {seconds} s)
         </span>
@@ -50,9 +44,7 @@ export function EpochBar({ auction, zk = false }: { auction: Address | undefined
       </div>
       <div className="clock-legend">
         <span>commit {clock.commit.toString()} blocks</span>
-        <span>
-          {zk ? "hand-off" : "reveal"} {clock.reveal.toString()}
-        </span>
+        <span>reveal {clock.reveal.toString()}</span>
         <span>solve {clock.solve.toString()}</span>
         <span>then settle</span>
       </div>

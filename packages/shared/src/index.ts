@@ -7,5 +7,4 @@ export * from "./contracts.ts";
 export * from "./deployments.ts";
 export * from "./format.ts";
 export * from "./order.ts";
-export * from "./zk.ts";
 export * from "./paths.ts";

@@ -9,8 +9,6 @@
   },
   "dependencies": {
     "@obscura/shared": "*",
-    "eciesjs": "^0.5.0",
-    "ethers": "^6.17.0",
-    "snarkjs": "^0.7.6"
+    "ethers": "^6.17.0"
   }
 }
